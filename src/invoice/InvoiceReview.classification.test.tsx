@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { describe, expect, it, vi } from "vitest";
@@ -61,7 +61,6 @@ describe("asynchronous category suggestions", () => {
     const originalPdf={numPages:1} as PDFDocumentProxy;
     const replacementPdf={numPages:1} as PDFDocumentProxy;
     const {rerender}=render(<InvoiceReview pdf={originalPdf} draft={initial} onDraftChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button",{name:"Positionen lokal klassifizieren"}));
     await waitFor(()=>expect(activeSignal).toBeDefined());
     rerender(<InvoiceReview pdf={replacementPdf} draft={{
       ...initial, items:[{...initial.items[0]!,description:"Frühstück Getränke",amount:"15,00"}],
@@ -87,7 +86,6 @@ describe("asynchronous category suggestions", () => {
     });
 
     render(<Harness />);
-    fireEvent.click(screen.getByRole("button", {name:"Positionen lokal klassifizieren"}));
     await waitFor(() => expect(predict).toHaveBeenCalledTimes(1));
     expect(requestSignal?.aborted).toBe(false);
 
@@ -98,6 +96,51 @@ describe("asynchronous category suggestions", () => {
     expect(screen.getByRole("combobox", {name:"Position 1 Kategorie"})).toHaveValue("city_tax");
     expect(screen.getByRole("table")).toHaveTextContent("Kurtaxe / Beherbergungssteuer");
     expect(screen.getByRole("table")).toHaveTextContent("20,00 €");
-    expect(screen.getByRole("button", {name:"Positionen lokal klassifizieren"})).toBeEnabled();
+    expect(screen.queryByRole("button", {name:"Positionen lokal klassifizieren"})).not.toBeInTheDocument();
+  });
+
+  it("starts automatically and stays editable when the optional model fails", async () => {
+    const predict = vi.mocked(classifyLocally);
+    predict.mockReset();
+    predict.mockRejectedValue(new Error("WASM_UNAVAILABLE"));
+    render(<Harness />);
+    await waitFor(() => expect(predict).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button",{name:"Positionen lokal klassifizieren"})).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("unknown");
+    expect(screen.getByRole("textbox",{name:"Position 1 Beschreibung"})).toBeEnabled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("does not overwrite a manual category with a late automatic prediction", async () => {
+    const predict = vi.mocked(classifyLocally);
+    predict.mockReset();
+    let finish: ((value: Awaited<ReturnType<typeof classifyLocally>>) => void) | undefined;
+    predict.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    render(<Harness />);
+    await waitFor(() => expect(finish).toBeDefined());
+    fireEvent.change(screen.getByRole("combobox",{name:"Position 1 Kategorie"}), {
+      target:{value:"other"},
+    });
+    await act(async () => {
+      finish?.({"line-1":{category:"parking",source:"fasttext",confidence:0.92}});
+    });
+    expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("other");
+    expect(screen.getByText("Manuell gewählt")).toBeInTheDocument();
+  });
+
+  it("does not rerun inference after amount or tax edits", async () => {
+    const predict = vi.mocked(classifyLocally);
+    predict.mockReset();
+    predict.mockResolvedValue({"line-1":{category:"unknown",source:"abstain",confidence:null}});
+    render(<Harness />);
+    await waitFor(() => expect(predict).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByRole("textbox",{name:"Position 1 Betrag"}), {
+      target:{value:"21,00"},
+    });
+    fireEvent.change(screen.getByRole("textbox",{name:"Position 1 Steuersatz"}), {
+      target:{value:"19%"},
+    });
+    await new Promise(resolve => setTimeout(resolve, 350));
+    expect(predict).toHaveBeenCalledTimes(1);
   });
 });
