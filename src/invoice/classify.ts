@@ -27,12 +27,12 @@ type Prediction = { category: string; probability: number };
 
 /** A very small high-precision fallback; conflicting keywords cause abstention. */
 const RULES: readonly { category: AssignedCategory; re: RegExp }[] = [
-  {category: "accommodation", re: /\b(?:übernachtung(?:en)?|zimmernacht|logis|room\s*(?:night|rate)|accommodation|lodging)\b/i},
-  {category: "food", re: /\b(?:frühstück(?:sspeisen)?|breakfast\s*(?:food|meal)|abendessen|mittagessen|dinner|lunch|speisen|mahlzeit|restaurant\s*meal)\b/i},
-  {category: "beverage", re: /\b(?:getränke?|drinks?|wasserflasche|softdrink|coffee|kaffee|tea|bier|wein|beverage|mineralwasser)\b/i},
-  {category: "parking", re: /\b(?:park(?:en|platz|gebühr|haus|ticket)|parking|garage\s*fee)\b/i},
-  {category: "city_tax", re: /\b(?:kurtaxe|city\s*tax|tourism\s*levy|beherbergungssteuer|bettensteuer|ortstaxe|tourismusabgabe)\b/i},
-  {category: "bundle", re: /\b(?:business\s*paket|arrangement|package|bundle|kombipaket|pauschale)\b/i},
+  {category: "accommodation", re: /(?<![\p{L}\p{N}])(?:übernachtung(?:en)?|zimmernacht|logis|room\s*(?:night|rate)|accommodation|lodging)(?![\p{L}\p{N}])/iu},
+  {category: "food", re: /(?<![\p{L}\p{N}])(?:frühstück(?:sspeisen)?|breakfast\s*(?:food|meal)|abendessen|mittagessen|dinner|lunch|speisen|mahlzeit|restaurant\s*meal)(?![\p{L}\p{N}])/iu},
+  {category: "beverage", re: /(?<![\p{L}\p{N}])(?:getränke?|drinks?|wasserflasche|softdrink|coffee|kaffee|tea|bier|wein|beverage|mineralwasser)(?![\p{L}\p{N}])/iu},
+  {category: "parking", re: /(?<![\p{L}\p{N}])(?:park(?:en|platz|gebühr|haus|ticket)|parking|garage\s*fee)(?![\p{L}\p{N}])/iu},
+  {category: "city_tax", re: /(?<![\p{L}\p{N}])(?:kurtaxe|city\s*tax|tourism\s*levy|beherbergungssteuer|bettensteuer|ortstaxe|tourismusabgabe)(?![\p{L}\p{N}])/iu},
+  {category: "bundle", re: /(?<![\p{L}\p{N}])(?:business\s*paket|arrangement|package|bundle|kombipaket|pauschale)(?![\p{L}\p{N}])/iu},
 ];
 const supported = new Set<string>(CATEGORY_IDS.filter(id => id !== "unknown"));
 const THRESHOLD = 0.83;
