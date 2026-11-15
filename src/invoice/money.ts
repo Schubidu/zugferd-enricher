@@ -10,6 +10,13 @@ export function parseCents(input: string): bigint | null {
   if (decimal < 0 || value.length - decimal !== 3) return null;
   const integerPart = value.slice(0, decimal);
   const centsPart = value.slice(decimal + 1);
+  // PDF.js normalizes non-breaking spaces to ordinary spaces. Only correctly
+  // grouped thousands are allowed; malformed grouping must never be truncated.
+  if (integerPart.includes(" ")) {
+    if (!/^\d{1,3}(?: \d{3})+$/.test(integerPart) || !/^\d{2}$/.test(centsPart)) return null;
+    const cents = BigInt(integerPart.replaceAll(" ", "")) * 100n + BigInt(centsPart);
+    return negative ? -cents : cents;
+  }
   const separator = decimal === comma ? "." : ",";
   const groups = integerPart.split(separator);
   if (!/^\d{2}$/.test(centsPart)) return null;
