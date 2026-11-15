@@ -18,6 +18,8 @@ export async function classifyLocally(
   const results = Object.fromEntries(items.map(item => [item.id, classifyDescription(item.description)]));
   const uncertain = items.filter(item => results[item.id]?.category === "unknown");
   if (!uncertain.length) return results;
+  // iOS Lockdown Mode can disable WebAssembly even when module Workers exist.
+  if (typeof WebAssembly === "undefined") throw new Error("WASM_UNAVAILABLE");
 
   let worker: Worker;
   try {
@@ -27,13 +29,20 @@ export async function classifyLocally(
   }
   return new Promise<Record<string, Classification>>((resolve, reject) => {
     const abort = () => {
-      worker.terminate();
+      finish();
       reject(new DOMException("Cancelled", "AbortError"));
     };
     const finish = () => {
+      clearTimeout(timeout);
       signal.removeEventListener("abort", abort);
       worker.terminate();
     };
+    // Safari may suspend or discard a worker under memory pressure without
+    // delivering an error event. Avoid leaving the UI busy indefinitely.
+    const timeout = setTimeout(() => {
+      finish();
+      reject(new Error("MODEL_TIMEOUT"));
+    }, 30_000);
     signal.addEventListener("abort", abort, { once: true });
     worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
       finish();

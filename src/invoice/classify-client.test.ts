@@ -36,6 +36,37 @@ describe("local classification worker lifecycle", () => {
     expect(terminated).toBe(true);
   });
 
+  it("reports unavailable WebAssembly before starting the worker (iOS Lockdown Mode)", async () => {
+    const worker = vi.fn();
+    vi.stubGlobal("Worker", worker);
+    vi.stubGlobal("WebAssembly", undefined);
+    await expect(classifyLocally([fixture], new AbortController().signal))
+      .rejects.toThrow("WASM_UNAVAILABLE");
+    expect(worker).not.toHaveBeenCalled();
+  });
+
+  it("terminates a silent worker after a bounded timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      let terminated = false;
+      class HangingWorker {
+        onmessage: ((event: MessageEvent) => void) | null = null;
+        onerror: (() => void) | null = null;
+        onmessageerror: (() => void) | null = null;
+        postMessage() {}
+        terminate() { terminated = true; }
+      }
+      vi.stubGlobal("Worker", HangingWorker);
+      const pending = classifyLocally([fixture], new AbortController().signal);
+      const expectation = expect(pending).rejects.toThrow("MODEL_TIMEOUT");
+      await vi.advanceTimersByTimeAsync(30_000);
+      await expectation;
+      expect(terminated).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not transmit any invoice data when a keyword rule is sufficient", async () => {
     const worker = vi.fn();
     vi.stubGlobal("Worker", worker);
