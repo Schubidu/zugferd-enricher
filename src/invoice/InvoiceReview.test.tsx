@@ -127,7 +127,7 @@ describe("position sum in the browser invoice review", () => {
   it("shows category totals and reassigns an amount immediately when a category changes", () => {
     render(<Harness />);
     const table = screen.getByRole("table");
-    expect(table).toHaveTextContent("Unbekannt – prüfen");
+    expect(table).toHaveTextContent("Unbekannt");
     expect(table).toHaveTextContent("6");
     expect(table).toHaveTextContent("421,00 €");
     expect(table).toHaveTextContent("Kurtaxe / Beherbergungssteuer");
@@ -165,39 +165,32 @@ describe("position sum in the browser invoice review", () => {
     expect(table).toHaveTextContent("10,50 €");
   });
 
-  it("highlights unknown categories and removes the highlight after assigning a category", () => {
+  it("keeps unknown optional categories visible without warnings", () => {
     render(<Harness />);
     const first = screen.getByText("Position 1").closest(".line-item");
-    const known = screen.getByText("Position 7").closest(".line-item");
-    expect(first).toHaveClass("line-item--unclassified");
-    expect(first).toHaveTextContent("Kategorie prüfen");
-    expect(known).not.toHaveClass("line-item--unclassified");
-    expect(screen.getByText(/6 Positionen benötigen eine Kategorie/)).toBeInTheDocument();
-
-    fireEvent.change(screen.getByRole("combobox", {name:"Position 1 Kategorie"}), {
-      target: {value:"accommodation"},
-    });
     expect(first).not.toHaveClass("line-item--unclassified");
-    expect(first).not.toHaveTextContent("Kategorie prüfen");
-    expect(screen.getByText(/5 Positionen benötigen eine Kategorie/)).toBeInTheDocument();
-
-    fireEvent.change(screen.getByRole("combobox", {name:"Position 1 Kategorie"}), {
-      target: {value:"unknown"},
+    expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("unknown");
+    expect(screen.queryByText("Kategorie prüfen")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Positionen benötigen eine Kategorie/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox",{name:"Position 1 Kategorie"}), {
+      target:{value:"accommodation"},
     });
-    expect(first).toHaveClass("line-item--unclassified");
-    expect(screen.getByText(/6 Positionen benötigen eine Kategorie/)).toBeInTheDocument();
+    expect(first).toHaveTextContent("Kategoriestatus: Manuell zugeordnet");
+    fireEvent.change(screen.getByRole("combobox",{name:"Position 1 Kategorie"}), {
+      target:{value:"unknown"},
+    });
+    expect(first).toHaveTextContent("Kategoriestatus: Unbekannt");
+    expect(screen.queryByText(/Positionen benötigen eine Kategorie/)).not.toBeInTheDocument();
   });
 
-  it("updates the unknown highlight when a description gains a known rule match", () => {
+  it("updates suggestions when a description gains a known rule match", () => {
     render(<Harness />);
-    const first = screen.getByText("Position 1").closest(".line-item");
-    expect(first).toHaveClass("line-item--unclassified");
-    fireEvent.change(screen.getByRole("textbox", {name:"Position 1 Beschreibung"}), {
-      target: {value:"Konferenzlunch"},
+    expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("unknown");
+    fireEvent.change(screen.getByRole("textbox",{name:"Position 1 Beschreibung"}), {
+      target:{value:"Konferenzlunch"},
     });
-    expect(first).not.toHaveClass("line-item--unclassified");
-    expect(screen.getByRole("combobox", {name:"Position 1 Kategorie"})).toHaveValue("food");
-    expect(screen.getByText(/5 Positionen benötigen eine Kategorie/)).toBeInTheDocument();
+    expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("food");
+    expect(screen.getByRole("table")).toHaveTextContent("Speisen / Frühstück");
   });
 
   it("manual category changes do not modify extracted tax rates or amounts", () => {
@@ -235,7 +228,7 @@ describe("position sum in the browser invoice review", () => {
     render(<Harness />);
     const first = screen.getByText("Position 1").closest(".line-item");
     const last = screen.getByText("Position 7").closest(".line-item");
-    expect(first).toHaveTextContent("Kategoriestatus: Unbekannt – prüfen");
+    expect(first).toHaveTextContent("Kategoriestatus: Unbekannt");
     expect(last).toHaveTextContent("Kategoriestatus: Vorgeschlagen – nicht bestätigt");
     const taxRate = screen.getByRole("textbox", {name: "Position 1 Steuersatz"});
     expect(taxRate).toHaveValue("7%");
@@ -249,8 +242,8 @@ describe("position sum in the browser invoice review", () => {
     fireEvent.change(screen.getByRole("combobox", {name: "Position 1 Kategorie"}), {
       target: {value: "unknown"},
     });
-    expect(first).toHaveTextContent("Kategoriestatus: Unbekannt – prüfen");
-    expect(first).toHaveClass("line-item--unclassified");
+    expect(first).toHaveTextContent("Kategoriestatus: Unbekannt");
+    expect(first).not.toHaveClass("line-item--unclassified");
   });
   it("hides findings UI when source-backed arithmetic has no findings", () => {
     const draft: InvoiceDraft = {
