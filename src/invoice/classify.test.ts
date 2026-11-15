@@ -84,7 +84,7 @@ describe("conservative source-separated classification", () => {
     expect(classifyDescription("X5 Zusatz")).toMatchObject({category:"unknown",source:"abstain"});
   });
   it("accepts a confident, unambiguous local model prediction", () => {
-    expect(classifyDescription("Cappuccino Frühstücksset", [
+    expect(classifyDescription("Unbekannte Serviceposition X5", [
       {category:"beverage", probability:0.92},{category:"food",probability:0.03},
     ])).toMatchObject({category:"beverage",source:"fasttext",confidence:0.92});
   });

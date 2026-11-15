@@ -57,7 +57,7 @@ const RULES: readonly { category: AssignedCategory; re: RegExp }[] = [
  * These exact component labels explicitly mean breakfast *drinks*, not a
  * combined meal. An unqualified "Frühstück und Getränke" stays ambiguous.
  */
-const BREAKFAST_DRINKS = /^(?:frühstücks?[\s-]*getränke(?:anteil)?|frühstück[\s-]*getränkeanteil|getränke(?:anteil)?[\s-]+(?:zum[\s-]+)?frühstück|breakfast[\s-]*(?:drinks?|beverages?))(?:\s+(?:am\s+)?\d{1,2}\.\d{1,2}\.(?:\d{2}|\d{4}))?$/iu;
+const BREAKFAST_DRINKS = /^(?:frühstücks?[\s:-]*getränke(?:anteil)?|frühstück[\s-]*getränkeanteil|getränke(?:anteil)?[\s-]+(?:zum[\s-]+)?frühstück|breakfast[\s-]*(?:drinks?|beverages?))(?:\s+(?:am\s+)?\d{1,2}\.\d{1,2}\.(?:\d{2}|\d{4}))?$/iu;
 const supported = new Set<string>(CATEGORY_IDS.filter(id => id !== "unknown"));
 const THRESHOLD = 0.83;
 const MIN_MARGIN = 0.2;
