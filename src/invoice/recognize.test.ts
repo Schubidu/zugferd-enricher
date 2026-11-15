@@ -236,4 +236,30 @@ describe("source-based invoice recognition", () => {
     }
   });
 
+
+  it("uses the independent local source-line model for alternate wording, without writing a 0% tax rate", () => {
+    const draft = recognizeInvoice(pageLines(1,[
+      "Ortstaxe 2 x 3,00 6,00",
+      "Ortstaxe im Namen der Stadt, keine Mehrwertsteuer: 6,00",
+      "Gesamtbetrag 6,00",
+    ]), 1);
+    expect(draft.items).toHaveLength(1);
+    expect(draft.items[0]).toMatchObject({
+      description: "Ortstaxe", amount: "6,00", taxRate: null,
+      taxTreatment: {kind: "third_party_no_vat", origin: "pdf", evidenceIds: ["p1-1"]},
+    });
+    expect(reconcileInvoice(draft).some(f => f.id === "missing-tax-rates")).toBe(false);
+  });
+
+  it("abstains for contradictory statements and prevents duplicate source rows", () => {
+    const draft = recognizeInvoice(pageLines(1,[
+      "Kurtaxe 3 x 3,50 10,50",
+      "Kurtaxe im Namen der Gemeinde mit 19% Umsatzsteuer: 10,50",
+      "Gesamtbetrag 10,50",
+    ]), 1);
+    expect(draft.items).toHaveLength(1);
+    expect(draft.items[0]?.taxTreatment).toBeUndefined();
+    expect(reconcileInvoice(draft).some(f => f.id === "missing-tax-rates")).toBe(true);
+  });
+
 });
