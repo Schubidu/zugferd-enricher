@@ -22,10 +22,11 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
   const [classificationError, setClassificationError] = useState<string | null>(null);
   const classificationController = useRef<AbortController | null>(null);
   useEffect(() => () => classificationController.current?.abort(), []);
+  // Manual edits remain visible but cannot make PDF-backed reconciliation pass.
   const totals = checkTotals(
-    draft.fields.netTotal?.value ?? null,
-    draft.fields.taxTotal?.value ?? null,
-    draft.fields.grossTotal?.value ?? null,
+    draft.fields.netTotal?.origin === "pdf" ? draft.fields.netTotal.value : null,
+    draft.fields.taxTotal?.origin === "pdf" ? draft.fields.taxTotal.value : null,
+    draft.fields.grossTotal?.origin === "pdf" ? draft.fields.grossTotal.value : null,
   );
   const positionSum = sumLineItemAmounts(draft.items);
   const categorySummary = summarizeCategories(draft.items, classifications);
@@ -80,6 +81,10 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
   }
   function updateItem(id: string, key: "description" | "amount" | "taxRate", value: string) {
     if (key === "description") {
+      classificationController.current?.abort();
+      classificationController.current = null;
+      setClassifying(false);
+      setClassificationError(null);
       setClassifications(previous => {
         const next = {...previous};
         delete next[id];

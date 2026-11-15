@@ -97,4 +97,41 @@ describe("source-backed invoice reconciliation",()=>{
     expect(reconcileInvoice(draft).some(f=>f.id==="date-order")).toBe(false);
   });
 
+  it("does not let manual totals satisfy checks against the printed invoice",()=>{
+    const draft=makeDraft();
+    draft.fields.grossTotal={value:"119,00",origin:"pdf",evidenceIds:["gross"]};
+    draft.fields.netTotal={value:"100,00",origin:"manual",evidenceIds:["old-net"]};
+    draft.fields.taxTotal={value:"19,00",origin:"manual",evidenceIds:[]};
+    const findings=reconcileInvoice(draft);
+    expect(findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({id:"document-total",severity:"review",evidenceIds:[]}),
+      expect.objectContaining({id:"manual-document-values",severity:"review",evidenceIds:[]}),
+    ]));
+    expect(findings.find(x=>x.id==="document-total")?.severity).not.toBe("mismatch");
+  });
+  it("does not attribute a manually adjusted item's arithmetic to the original PDF",()=>{
+    const draft=makeDraft();
+    draft.items=[item({amount:"999,99",origin:"manual"})];
+    expect(reconcileInvoice(draft)).toEqual(expect.arrayContaining([
+      expect.objectContaining({id:"manual-item-item",severity:"review",evidenceIds:[]}),
+    ]));
+    expect(reconcileInvoice(draft).find(x=>x.id==="quantity-item")).toBeUndefined();
+  });
+  it("detects a tax-group net total that contradicts the printed document net total",()=>{
+    const draft=makeDraft();
+    fieldsWithMoney(draft,"100,00","14,00","114,00");
+    draft.taxGroups=[{rate:"7%",net:"200,00",tax:"14,00",evidenceIds:["group7"]}];
+    expect(reconcileInvoice(draft)).toEqual(expect.arrayContaining([
+      expect.objectContaining({id:"net-summary",severity:"review",evidenceIds:["group7","net"]}),
+    ]));
+  });
+  it("detects earlier due dates written with English month names",()=>{
+    const draft=makeDraft();
+    draft.fields.invoiceDate={value:"November 15, 2026",origin:"pdf",evidenceIds:["date1"]};
+    draft.fields.dueDate={value:"November 10, 2026",origin:"pdf",evidenceIds:["date2"]};
+    expect(reconcileInvoice(draft)).toEqual(expect.arrayContaining([
+      expect.objectContaining({id:"date-order",severity:"review",evidenceIds:["date1","date2"]}),
+    ]));
+  });
+
 });

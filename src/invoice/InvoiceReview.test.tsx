@@ -141,4 +141,20 @@ describe("position sum in the browser invoice review", () => {
     expect(screen.getByText("431,50 €")).toBeInTheDocument();
   });
 
+  it("does not show an original-PDF consistency verdict after manual net or tax corrections",()=>{
+    const draft: InvoiceDraft = {
+      ...initialDraft,
+      fields: {
+        ...emptyFields(),
+        netTotal: {value:"100,00",origin:"manual",evidenceIds:[]},
+        taxTotal: {value:"19,00",origin:"manual",evidenceIds:[]},
+        grossTotal: {value:"119,00",origin:"pdf",evidenceIds:["gross"]},
+      },
+    };
+    render(<InvoiceReview pdf={pdf} draft={draft} onDraftChange={vi.fn()} />);
+    expect(screen.getByText(/Summen nicht vollständig prüfbar/i)).toBeInTheDocument();
+    expect(screen.getByText(/Manuell geänderte Summen sind nicht durch das Original belegt/i)).toBeInTheDocument();
+    expect(screen.queryByText(/rechnerisch konsistent/i)).not.toBeInTheDocument();
+  });
+
 });
