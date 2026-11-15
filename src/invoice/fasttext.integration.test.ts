@@ -41,8 +41,8 @@ describe("pure-Rust WASM and quantized model compatibility", () => {
       ["Kurtaxe je Nacht","city_tax"],
       ["Business arrangement conference","bundle"],
       ["Kombipaket Hotel","bundle"],
-      ["Büromaterial Papier","other"],
-      ["USB Kabel Adapter","other"],
+      ["Büromaterial Papier","office_supplies"],
+      ["USB Kabel Adapter","hardware"],
     ];
     const outOfScope = [
       "Invoice number H-2026-123",
