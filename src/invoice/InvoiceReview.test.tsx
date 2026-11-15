@@ -285,4 +285,35 @@ describe("position sum in the browser invoice review", () => {
     expect(screen.queryByText(/keine rechnerischen Abweichungen/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button",{name:"Position 7: Kurtaxe bearbeiten"})).toBeInTheDocument();
   });
+
+  it("shows a source-linked no-VAT treatment and invalidates it on edit", () => {
+    const draft: InvoiceDraft = {
+      ...initialDraft,
+      items:[{
+        id:"city-tax",description:"Kurtaxe",quantity:"3",unitPrice:"3,50",
+        amount:"10,50",taxRate:null,origin:"pdf",
+        evidenceIds:["position"],
+        taxTreatment:{kind:"third_party_no_vat",origin:"pdf",evidenceIds:["source-note"]},
+      }],
+      sourceLines:[
+        {id:"position",page:1,text:"Kurtaxe 3 x 3,50 10,50",box:{x:.1,y:.2,width:.6,height:.02}},
+        {id:"source-note",page:1,text:"Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 10,50",box:{x:.1,y:.7,width:.6,height:.02}},
+      ],
+    };
+    function LocalHarness() {
+      const [current, setCurrent] = useState(draft);
+      return <InvoiceReview pdf={pdf} draft={current} onDraftChange={setCurrent}/>;
+    }
+    render(<LocalHarness/>);
+    expect(screen.getByText("Ohne Umsatzsteuer (im Namen der Gemeinde)")).toBeInTheDocument();
+    expect(screen.getByText(/USt-Betrag: 0,00 €/)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox",{name:"Position 1 Steuersatz"})).not.toBeInTheDocument();
+    expect(screen.queryByText(/ohne belegten Steuersatz oder Steuerstatus/i)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button",{name:"Fundstelle S. 1 im PDF ansehen"})).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button",{name:"Steuerangabe korrigieren"}));
+    expect(screen.queryByText("Ohne Umsatzsteuer (im Namen der Gemeinde)")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox",{name:"Position 1 Steuersatz"})).toHaveValue("");
+    expect(screen.getByText(/Kein belegter Steuersatz oder Steuerstatus/)).toBeInTheDocument();
+  });
+
 });
