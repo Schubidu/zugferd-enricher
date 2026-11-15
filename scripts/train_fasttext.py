@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Reproducible synthetic corpus and small quantized fastText model for local inference.
 
-Requires fasttext==0.9.3. No personal or third-party invoice data are used.
+Requires fasttext-new==0.1.0 (fastText-compatible). No personal or third-party invoice data are used.
 The benchmark is a synthetic smoke test, NOT evidence of real-world accuracy.
 """
 from __future__ import annotations
 from pathlib import Path
 import json
 import tempfile
-import fasttext
+import fasttext_new as fasttext
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL = ROOT / "public/models/invoice-categories-v1.ftz"
@@ -88,9 +88,9 @@ def main() -> None:
         # Fixed order and single-thread training; no private invoice training data.
         train.write_text("\n".join(lines) + "\n", encoding="utf8")
         model = fasttext.train_supervised(
-            input=str(train), lr=0.005, epoch=15, dim=16, bucket=2000,
+            input=str(train), lr=0.1, epoch=25, dim=16, bucket=2000,
             minn=0, maxn=0, wordNgrams=2, minCount=1,
-            loss="hs", thread=1, seed=42, verbose=0,
+            loss="softmax", thread=1, seed=42, verbose=0,
         )
         model.quantize(input=str(train), retrain=True, qnorm=True, dsub=2, verbose=0)
         model.save_model(str(MODEL))
