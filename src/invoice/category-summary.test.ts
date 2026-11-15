@@ -60,4 +60,13 @@ describe("source-backed category sums", () => {
   it("shows no category sum for missing line items", () => {
     expect(summarizeCategories([], {})).toEqual([]);
   });
+
+  it("does not silently merge unknown lines into manually chosen other", () => {
+    const items = [item("a", "X5 Zusatz", "10,00"), item("b", "Unbekannte Position", "5,00")];
+    const summary = summarizeCategories(items, {a: manual("other")});
+    expect(summary).toEqual([
+      {category: "other", count: 1, invalidCount: 0, totalCents: 1000n},
+      {category: "unknown", count: 1, invalidCount: 0, totalCents: 500n},
+    ]);
+  });
 });
