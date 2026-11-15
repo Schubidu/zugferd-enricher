@@ -68,4 +68,36 @@ describe("position sum in the browser invoice review", () => {
     expect(screen.getByTestId("original-pdf-preview")).toHaveTextContent("2:amount");
   });
 
+  it("renders source-backed tax findings separately from category suggestions", () => {
+    const draft: InvoiceDraft = {
+      ...initialDraft,
+      fields: {
+        ...emptyFields(),
+        netTotal: {value:"100,00",origin:"pdf",evidenceIds:["n"]},
+        taxTotal: {value:"19,00",origin:"pdf",evidenceIds:["t"]},
+        grossTotal: {value:"120,00",origin:"pdf",evidenceIds:["g"]},
+      },
+      items: [{...initialDraft.items[0]!,description:"Kurtaxe",taxRate:null,quantity:null,unitPrice:null}],
+    };
+    render(<InvoiceReview pdf={pdf} draft={draft} onDraftChange={vi.fn()} />);
+    expect(screen.getByRole("heading",{name:"Rechnerische Plausibilitätsprüfung"})).toBeInTheDocument();
+    expect(screen.getByText(/Netto \+ Steuer weicht/i)).toBeInTheDocument();
+    expect(screen.getByText(/Kategorien ersetzen keine Steuerangaben/i)).toBeInTheDocument();
+    expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("city_tax");
+  });
+
+  it("manual category changes do not modify extracted tax rates or amounts", () => {
+    render(<Harness />);
+    expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("unknown");
+    const input = screen.getByRole("textbox",{name:"Position 1 Steuersatz"});
+    expect(input).toHaveValue("7%");
+    fireEvent.change(screen.getByRole("combobox",{name:"Position 1 Kategorie"}),{
+      target:{value:"beverage"},
+    });
+    expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("beverage");
+    expect(screen.getByText("Manuell gewählt")).toBeInTheDocument();
+    expect(input).toHaveValue("7%");
+    expect(screen.getByText("431,50 €")).toBeInTheDocument();
+  });
+
 });
