@@ -94,9 +94,6 @@ export const MODEL_TERMS = new Set<string>([
   "tourism",
   "tourismusabgabe",
   "touristensteuer",
-  "übernachtung",
-  "übernachtungsleistung",
-  "übernachtungssteuer",
   "usb",
   "valet",
   "wartungsleistung",
@@ -106,6 +103,9 @@ export const MODEL_TERMS = new Set<string>([
   "zimmernacht",
   "zimmerpreis",
   "zubehör",
+  "übernachtung",
+  "übernachtungsleistung",
+  "übernachtungssteuer",
 ]);
 
 export function hasKnownModelTerm(description: string): boolean {
