@@ -72,7 +72,7 @@ def training_vocabulary() -> list[str]:
         token
         for bases in CATEGORIES.values()
         for base in bases
-        for token in re.findall(r"[^\\W\\d_]+", base.lower())
+        for token in re.findall(r"[^\W\d_]+", base.lower())
         if len(token) >= 3 and token not in GENERIC_TERMS
     })
 
@@ -112,11 +112,17 @@ def main() -> None:
         if overlaps:
             raise SystemExit("Held-out evaluation overlaps synthetic training examples: " + ", ".join(overlaps))
         vocab_text = (
-            "// Generated from scripts/train_fasttext.py category bases. Do not edit manually.\\n"
-            "export const MODEL_TERMS = new Set<string>([\\n"
-            + "".join("  " + json.dumps(term, ensure_ascii=False) + ",\\n"
+            "// Generated from scripts/train_fasttext.py category bases. Do not edit manually.\n"
+            "export const MODEL_TERMS = new Set<string>([\n"
+            + "".join("  " + json.dumps(term, ensure_ascii=False) + ",\n"
                       for term in training_vocabulary())
-            + "]);\\n"
+            + "]);\n"
+            + r"""
+export function hasKnownModelTerm(description: string): boolean {
+  const tokens = description.toLocaleLowerCase("de-DE").match(/[\p{L}]+/gu) ?? [];
+  return tokens.some(token => MODEL_TERMS.has(token));
+}
+"""
         )
         VOCABULARY_FILE.write_text(vocab_text, encoding="utf8")
         # Fixed order and single-thread training; no private invoice training data.
