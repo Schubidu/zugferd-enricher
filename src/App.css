@@ -103,10 +103,6 @@ h1 span { color: #47749c; }
 .field-meta { display: flex; gap: 7px; justify-content: space-between; align-items: center; flex-wrap: wrap; font-size: .72rem; color: #52667b; font-weight: 400; }
 .evidence-link { padding: 3px 5px; border: 0; background: none; color: #225b94; text-decoration: underline; cursor: pointer; font-size: .76rem; font-weight: 650; }
 .evidence-link:hover { color: #163e68; }
-.total-check { padding: 12px; border-radius: 8px; margin: 15px 0 0; font-size: .86rem; line-height: 1.5; }
-.total-check.match { background: #e5f2e9; color: #1a5530; }
-.total-check.unknown { background: #f1f4f8; color: #334c64; }
-.total-check.mismatch { background: #fce8e6; color: #8a2930; }
 .quiet { color: #506477; line-height: 1.5; font-size: .85rem; margin: 6px 0; font-weight: 400; }
 .line-items { display: grid; gap: 13px; }
 .line-item { border-top: 1px solid #dce4ed; padding-top: 13px; }
