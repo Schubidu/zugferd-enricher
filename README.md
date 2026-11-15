@@ -2,7 +2,7 @@
 
 Local-first, privacy-friendly tool to analyze, validate, and enrich existing PDF invoices with ZUGFeRD data.
 
-> **Project stage – Issue #1:** The current application only selects a PDF locally. PDF text extraction, invoice verification, OCR, classification and ZUGFeRD export are **not implemented** yet.
+> **Project stage – Issue #2:** Text-based PDFs can now be read locally with PDF.js. Extracted data are source-linked candidates, not validated invoices. OCR, comprehensive tax validation, classification and ZUGFeRD export are not implemented.
 
 ## What this project will do
 
@@ -17,11 +17,11 @@ The supplier's original PDF must stay intact. A user-created ZUGFeRD processing 
 
 ## Privacy contract
 
-Invoice files, file names, extracted data and model input **must stay in the browser**. This foundation contains no invoice upload endpoint, backend, analytics, external AI inference or document persistence. The selection UI stores only the chosen browser File object in React state; it never reads or transmits its bytes.
+Invoice files, file names, extracted data and model input **must stay in the browser**. This foundation contains no invoice upload endpoint, backend, analytics, external AI inference or document persistence. The selection UI stores the browser File object locally; only after the user presses "PDF lokal auslesen" does PDF.js read it with a local worker. No invoice bytes or extracted data leave the browser.
 
 Future OCR/classifier assets may be downloaded as public, versioned static files **on demand**, with local caching where feasible. Requests for application/model assets are not invoice uploads. The public repository uses synthetic test data only.
 
-The current picker filters by filename extension and size (maximum 50 MB) for UX. **It does not validate PDF structure, invoices or tax values.** Those functions will follow in later issues.
+The picker filters the filename and size (maximum 50 MB); PDF.js checks actual PDF readability after user action. Source lines retain page indexes and approximate bounding rectangles. The review UI shows detected candidates, allows manual correction, and checks explicitly listed net + tax = gross using exact cents. This is not full invoice/VAT validation; item amounts are never assumed to be net/gross and unspecified tax allocations are never invented.
 
 ## Development
 
@@ -64,3 +64,14 @@ The project follows [Schubidu/engineering-standards](https://github.com/Schubidu
 ## License and independence
 
 MIT (see LICENSE). Future model weights, WASM runtimes, XML schemas and conformance tools each need separate license verification. This is an independent tool, not affiliated with FeRD. ZUGFeRD is a trademark of its respective owner. Keep original invoices and seek employer/accounting acceptance before using derivative files as reimbursement evidence.
+
+
+## PDF extraction limitations (Issue #2)
+
+- Browser-only PDF.js display and parsing. No invoice URL, document upload, analytics, or model-based extraction.
+- Positions are approximate page-relative rectangles derived from PDF.js text fragments; unusual layouts (columns, tables, overlapping text, rotated text) may produce incorrect line grouping. The user can always inspect original source text and correct fields. Highlighted text is evidence of the *original extraction*, not proof of a manual edit.
+- Labels are deliberately conservative: issuer/recipient are populated only when explicitly labeled; dates accept ISO, German dotted dates, or English month-name dates. Ambiguous numerical slash dates are never guessed. The basic regex reader supports a subset of line-item layouts and tax tables, not arbitrary invoice templates.
+- A row's amount has an **unknown basis** (net/gross). Only explicitly printed amounts/rates are shown; the app does not calculate unstated VAT or split packages.
+- Scans and image-only PDFs show an OCR-needed warning (planned separately in issue #4).
+- The source PDF is unchanged; the parsed PDF worker/document is released when the user changes or removes the file. No export/rewriting is performed.
+- Security boundaries: no PDF scripts are executed for invoice logic; PDF.js text worker runs locally, with evaluation disabled. Inspect the network panel to verify only the app's static assets load.
