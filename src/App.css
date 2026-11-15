@@ -139,10 +139,6 @@ h1 span { color: #47749c; }
 .position-sum .quiet { margin: 0; }
 .position-sum-error { margin: 0; color: #8a2930; font-size: .85rem; }
 
-.classification-action { border: 1px solid #dce5f0; border-radius: 10px; padding: 12px; margin-bottom: 14px; }
-.classification-action button { color: #fff; background: #244d78; border: 0; border-radius: 8px; min-height: 44px; padding: 10px 14px; cursor: pointer; font-weight: 650; }
-.classification-action button:disabled { opacity: .6; cursor: default; }
-.classification-action .quiet { margin-top: 8px; }
 .category-field { display: grid; gap: 5px; margin-top: 12px; font-size: .82rem; font-weight: 650; }
 .category-field select { min-height: 44px; width: 100%; border: 1px solid #b2c2d4; border-radius: 8px; background: #fff; color: #152238; padding: 8px 10px; }
 .category-origin { color: #53677b; font-size: .78rem; margin: 5px 0; }
@@ -168,24 +164,6 @@ h1 span { color: #47749c; }
 .category-summary-invalid { display: block; font-size: .78rem; color: #8a2930; }
 
 
-/* Unresolved categories are review tasks, not arithmetic errors. */
-.unclassified-summary {
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  border: 1px solid #d9b875;
-  border-radius: 8px;
-  background: #fff8e9;
-  color: #68440c;
-  font-size: .86rem;
-  line-height: 1.5;
-}
-.line-item--unclassified {
-  padding: 13px 14px 14px;
-  border: 1px solid #dbbd80;
-  border-left: 5px solid #b87419;
-  border-radius: 10px;
-  background: #fff9eb;
-}
 .line-item-heading {
   display: flex;
   flex-wrap: wrap;
@@ -196,19 +174,6 @@ h1 span { color: #47749c; }
 .line-item-title {
   flex-wrap: wrap;
   gap: 6px 12px;
-}
-.category-review-label {
-  display: inline-block;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: #f6e4bc;
-  color: #634007;
-  font-size: .74rem;
-  font-weight: 750;
-  line-height: 1.4;
-}
-.line-item--unclassified .category-field select {
-  border-color: #a56b19;
 }
 
 
