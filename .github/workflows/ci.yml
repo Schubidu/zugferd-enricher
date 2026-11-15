@@ -21,8 +21,6 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Audit report (diagnostic)
-        run: |
-          npm audit --json > audit.json || true
-          node -e 'const r = require("node:fs").readFileSync("audit.json", "utf8"); const a = JSON.parse(r); for (const [name, v] of Object.entries(a.vulnerabilities || {})) if (v.severity === "critical" || v.severity === "high") console.log(JSON.stringify({name, severity:v.severity, isDirect:v.isDirect, via:v.via, fixAvailable:v.fixAvailable, range:v.range}));'
+      - name: Block high and critical dependency advisories
+        run: npm audit --audit-level=high
       - run: npm run check
