@@ -6,6 +6,13 @@ const examples: Array<[string,string]> = [
   ["Übernachtung 14.11.", "accommodation"],
   ["Logis Einzelzimmer", "accommodation"],
   ["Breakfast food", "food"],
+  ["Konferenzlunch", "food"],
+  ["Konferenz-Lunch", "food"],
+  ["Tagungslunch", "food"],
+  ["Frühstück Getränke", "beverage"],
+  ["Frühstücksgetränke", "beverage"],
+  ["Frühstück Getränke 15.11.2026", "beverage"],
+  ["Breakfast drinks", "beverage"],
   ["Frühstück Speisen", "food"],
   ["Mineralwasser Getränke", "beverage"],
   ["Coffee", "beverage"],
@@ -22,6 +29,8 @@ describe("conservative source-separated classification", () => {
   });
   it("abstains on mixed services and unfamiliar descriptions", () => {
     expect(classifyDescription("Frühstück und Getränke").category).toBe("unknown");
+    expect(classifyDescription("Frühstück Getränke und Speisen").category).toBe("unknown");
+    expect(classifyDescription("Lunch und Getränke").category).toBe("unknown");
     expect(classifyDescription("X5 Zusatz")).toMatchObject({category:"unknown",source:"abstain"});
   });
   it("accepts a confident, unambiguous local model prediction", () => {

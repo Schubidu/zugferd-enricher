@@ -28,12 +28,15 @@ type Prediction = { category: string; probability: number };
 /** A very small high-precision fallback; conflicting keywords cause abstention. */
 const RULES: readonly { category: AssignedCategory; re: RegExp }[] = [
   {category: "accommodation", re: /(?<![\p{L}\p{N}])(?:übernachtung(?:en)?|zimmernacht|logis|room\s*(?:night|rate)|accommodation|lodging)(?![\p{L}\p{N}])/iu},
-  {category: "food", re: /(?<![\p{L}\p{N}])(?:frühstück(?:sspeisen)?|breakfast\s*(?:food|meal)|abendessen|mittagessen|dinner|lunch|speisen|mahlzeit|restaurant\s*meal)(?![\p{L}\p{N}])/iu},
+  {category: "food", re: /(?<![\p{L}\p{N}])(?:frühstück(?:sspeisen)?|breakfast\s*(?:food|meal)|abendessen|mittagessen|dinner|(?:konferenz|tagungs|seminar)[\s-]*lunch|lunch|speisen|mahlzeit|restaurant\s*meal)(?![\p{L}\p{N}])/iu},
   {category: "beverage", re: /(?<![\p{L}\p{N}])(?:getränke?|drinks?|wasserflasche|softdrink|coffee|kaffee|tea|bier|wein|beverage|mineralwasser)(?![\p{L}\p{N}])/iu},
   {category: "parking", re: /(?<![\p{L}\p{N}])(?:park(?:en|platz|gebühr|haus|ticket)|parking|garage\s*fee)(?![\p{L}\p{N}])/iu},
   {category: "city_tax", re: /(?<![\p{L}\p{N}])(?:kurtaxe|city\s*tax|tourism\s*levy|beherbergungssteuer|bettensteuer|ortstaxe|tourismusabgabe)(?![\p{L}\p{N}])/iu},
   {category: "bundle", re: /(?<![\p{L}\p{N}])(?:business\s*paket|arrangement|package|bundle|kombipaket|pauschale)(?![\p{L}\p{N}])/iu},
 ];
+// Explicit line-item component labels override the broad "Frühstück" keyword.
+// Match the entire description to avoid silently treating mixed meals as drinks.
+const BREAKFAST_DRINKS = /^(?:frühstück[\s-]+getränke|frühstücksgetränke|breakfast[\s-]+(?:drinks?|beverages?))(?:\s+\d{1,2}\.\d{1,2}\.(?:\d{2}|\d{4}))?$/iu;
 const supported = new Set<string>(CATEGORY_IDS.filter(id => id !== "unknown"));
 const THRESHOLD = 0.83;
 const MIN_MARGIN = 0.2;
@@ -42,6 +45,9 @@ export function classifyDescription(
   description: string,
   predictions: readonly Prediction[] = [],
 ): Classification {
+  if (BREAKFAST_DRINKS.test(description.trim())) {
+    return {category: "beverage", source: "rule", confidence: null};
+  }
   const matches = RULES.filter(rule => rule.re.test(description));
   if (matches.length === 1) return {category: matches[0]!.category, source: "rule", confidence: null};
   // Mixed keywords / split components must never be "solved" by a confidence score.
