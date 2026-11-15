@@ -98,7 +98,25 @@ jobs:
             const diagnostic=await page.locator('.classification-action [role="alert"]').allTextContents();
             const sources=await page.locator('.category-origin').allTextContents();
             console.log('BROWSER_CLASSIFICATION',JSON.stringify({diagnostic,sources,responses,failures}));
-            if(diagnostic.length)throw new Error('WebKit fastText model initialization failed: '+diagnostic.join(' '));
+            if (diagnostic.length) {
+              const core=responses.find(item=>item.path.includes('/assets/fasttext-')&&item.path.endsWith('.mjs'))?.path;
+              const wasm=responses.find(item=>item.path.includes('/assets/fasttext-')&&item.path.endsWith('.wasm'))?.path;
+              if (core && wasm) {
+                const detail = await page.evaluate(async ({core,wasm})=>{
+                  try {
+                    const exported = await import(core);
+                    const factory=exported.default;
+                    if (typeof factory !== 'function') return {stage:'module',keys:Object.keys(exported)};
+                    const instance=await factory({locateFile:()=>wasm,print:()=>{},printErr:()=>{}});
+                    return {stage:'success',hasFastText:!!instance.FastText};
+                  } catch (error) {
+                    return {stage:'error',name:error.name,message:error.message,stack:String(error.stack).slice(0,1500)};
+                  }
+                },{core,wasm});
+                console.log('CORE_WEBKIT_DIAGNOSTIC',JSON.stringify(detail));
+              }
+              throw new Error('WebKit fastText model initialization failed: '+diagnostic.join(' '));
+            }
           } finally {
             await browser.close();
           }
