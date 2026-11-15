@@ -86,10 +86,10 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
       }
     }
   }
-  function focusReviewSection(id: string) {
+  function focusReviewSection(id: string, selector = "input, select, button") {
     const target = document.getElementById(id);
     target?.scrollIntoView?.({behavior: "smooth", block: "center"});
-    const input = target?.querySelector<HTMLInputElement>("input, select, button");
+    const input = target?.querySelector<HTMLInputElement>(selector);
     input?.focus({preventScroll: true});
   }
   function updateField(key: FieldKey, value: string) {
@@ -136,7 +136,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
       </div>
       <section className="review-findings" aria-labelledby="reconciliation-heading">
         <div className="review-findings-heading">
-          <h3 id="reconciliation-heading">Prüfpunkte</h3>
+          <h3 id="reconciliation-heading">Rechnerische Plausibilitätsprüfung</h3>
           <span>{findings.length} {findings.length === 1 ? "Hinweis" : "Hinweise"}</span>
         </div>
         <p className="quiet">
@@ -157,7 +157,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                       return (
                         <button
                           type="button" className="review-action" key={item.id}
-                          onClick={() => focusReviewSection("line-item-" + item.id)}
+                          onClick={() => focusReviewSection("line-item-" + item.id, \'input[aria-label$=" Steuersatz"]\')}
                         >
                           Position {index + 1}: {item.description} bearbeiten
                         </button>
@@ -165,7 +165,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                     })
                   ) : finding.id.startsWith("manual-item-") || finding.id.startsWith("quantity-") ? (
                     <button className="review-action" type="button"
-                      onClick={() => focusReviewSection("line-item-" + finding.id.replace(/^(?:manual-item-|quantity-)/, ""))}>
+                      onClick={() => focusReviewSection("line-item-" + finding.id.replace(/^(?:manual-item-|quantity-)/, ""), \'input[aria-label$=" Betrag"]\')}>
                       Betroffene Position bearbeiten
                     </button>
                   ) : finding.id === "net-summary" || finding.id === "tax-summary" ||
@@ -408,6 +408,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
         <dialog
           ref={inspectorRef}
           className="evidence-dialog"
+          open={typeof HTMLDialogElement === "undefined" || typeof HTMLDialogElement.prototype.showModal !== "function"}
           aria-label="Fundstelle im Originaldokument"
           onClose={() => setInspectedEvidence(null)}
         >

@@ -64,8 +64,46 @@ describe("position sum in the browser invoice review", () => {
       ],
     };
     render(<InvoiceReview pdf={{numPages:2} as PDFDocumentProxy} draft={draft} onDraftChange={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", {name: "Fundstelle S. 2"}));
-    expect(screen.getByTestId("original-pdf-preview")).toHaveTextContent("2:amount");
+    fireEvent.click(screen.getByRole("button", {name: "Fundstelle S. 2 im PDF ansehen"}));
+    expect(screen.getByRole("dialog", {name:"Fundstelle im Originaldokument"})).toBeInTheDocument();
+    expect(screen.getAllByTestId("original-pdf-preview")).toEqual(expect.arrayContaining([
+      expect.objectContaining({textContent:"2:amount"}),
+    ]));
+    fireEvent.click(screen.getByRole("button", {name:"Zur Prüfung zurück"}));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("shows actionable warnings before the long list of positions", () => {
+    render(<Harness />);
+    const status = screen.getByRole("heading", {name:"Rechnerische Plausibilitätsprüfung"});
+    const positions = screen.getByRole("heading", {name:"Rechnungspositionen"});
+    expect(status.compareDocumentPosition(positions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText(/mindestens eine position hat keinen belegten steuersatz/i)).toBeInTheDocument();
+    const missingTax = screen.getByRole("button", {name:"Position 7: Kurtaxe bearbeiten"});
+    fireEvent.click(missingTax);
+    expect(screen.getByRole("textbox", {name:"Position 7 Steuersatz"})).toHaveFocus();
+  });
+
+  it("links net/group mismatches to each printed PDF amount separately", () => {
+    const draft: InvoiceDraft = {
+      ...initialDraft,
+      fields: {
+        ...emptyFields(),
+        netTotal: {value:"130,00", origin:"pdf", evidenceIds:["net-total"]},
+      },
+      taxGroups: [{rate:"7%", net:"100,00", tax:"7,00", evidenceIds:["group-7"]}],
+      sourceLines: [
+        {id:"group-7",page:1,text:"7% Netto 100,00",box:{x:.1,y:.3,width:.5,height:.02}},
+        {id:"net-total",page:2,text:"Netto 130,00",box:{x:.1,y:.7,width:.5,height:.02}},
+      ],
+    };
+    render(<InvoiceReview pdf={{numPages:2} as PDFDocumentProxy} draft={draft} onDraftChange={vi.fn()} />);
+    expect(screen.getByRole("button",{name:"Steuergruppe 7% im PDF ansehen"})).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button",{name:"Gesamtnetto im PDF ansehen"}));
+    expect(screen.getByRole("dialog",{name:"Fundstelle im Originaldokument"})).toBeInTheDocument();
+    expect(screen.getAllByTestId("original-pdf-preview")).toEqual(expect.arrayContaining([
+      expect.objectContaining({textContent:"2:net-total"}),
+    ]));
   });
 
   it("renders source-backed tax findings separately from category suggestions", () => {
