@@ -22,13 +22,13 @@ function App() {
 
   useEffect(() => () => {
     generation.current++;
-    if (loadedRef.current) void loadedRef.current.pdf.destroy();
+    if (loadedRef.current) void loadedRef.current.pdf.loadingTask.destroy();
     loadedRef.current = null;
   }, []);
 
   function clearLoaded() {
     generation.current++;
-    if (loadedRef.current) void loadedRef.current.pdf.destroy();
+    if (loadedRef.current) void loadedRef.current.pdf.loadingTask.destroy();
     loadedRef.current = null;
     setLoaded(null);
     setReading(false);
@@ -43,10 +43,10 @@ function App() {
       const { loadInvoicePdf } = await import("./invoice/pdf");
       const result = await loadInvoicePdf(selectedFile);
       if (generation.current !== active) {
-        void result.pdf.destroy();
+        void result.pdf.loadingTask.destroy();
         return;
       }
-      if (loadedRef.current) void loadedRef.current.pdf.destroy();
+      if (loadedRef.current) void loadedRef.current.pdf.loadingTask.destroy();
       loadedRef.current = result;
       setLoaded(result);
     } catch {

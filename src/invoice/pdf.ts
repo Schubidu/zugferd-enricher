@@ -44,7 +44,6 @@ export async function loadInvoicePdf(file: File): Promise<LoadedInvoice> {
   const sourceBytes = new Uint8Array(await file.arrayBuffer());
   const loading = pdfjs.getDocument({
     data: sourceBytes,
-    isEvalSupported: false,
     useSystemFonts: true,
   });
   try {
@@ -73,7 +72,7 @@ export async function loadInvoicePdf(file: File): Promise<LoadedInvoice> {
       }
       return { pdf, draft: recognizeInvoice(lines, pdf.numPages) };
     } catch (e) {
-      await pdf.destroy();
+      await pdf.loadingTask.destroy();
       throw e;
     }
   } catch (error) {

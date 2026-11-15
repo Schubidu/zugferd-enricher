@@ -58,7 +58,7 @@ describe("source-based invoice recognition", () => {
     expect(draft.fields.invoiceDate).toBeNull();
     expect(draft.fields.grossTotal).toBeNull();
     expect(draft.items).toHaveLength(1);
-    expect(draft.items[0].taxRate).toBeNull();
+    expect(draft.items[0]?.taxRate).toBeNull();
     expect(draft.taxGroups).toEqual([]);
     expect(draft.warnings.some(w => /Gesamtbetrag/i.test(w))).toBe(true);
   });

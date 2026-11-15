@@ -29,7 +29,6 @@ export function checkTotals(
 ): { status: "unknown" | "match" | "mismatch"; deltaCents?: string } {
   const parsed = [net, tax, gross].map(x => x === null ? null : parseCents(x));
   if (parsed.some(x => x === null)) return { status: "unknown" };
-  const [n, t, g] = parsed as bigint[];
-  const delta = n + t - g;
+  const delta = parsed[0]! + parsed[1]! - parsed[2]!;
   return { status: delta === 0n ? "match" : "mismatch", deltaCents: delta.toString() };
 }

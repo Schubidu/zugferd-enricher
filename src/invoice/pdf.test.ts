@@ -59,7 +59,7 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
       expect(result.draft.sourceLines.every(x =>
         x.box.x >= 0 && x.box.x <= 1 && x.box.y >= 0 && x.box.y <= 1)).toBe(true);
     } finally {
-      await result.pdf.destroy();
+      await result.pdf.loadingTask.destroy();
     }
   });
 
@@ -69,7 +69,7 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
       expect(result.draft.fields.invoiceNumber).toBeNull();
       expect(result.draft.warnings.some(x => /OCR/i.test(x))).toBe(true);
     } finally {
-      await result.pdf.destroy();
+      await result.pdf.loadingTask.destroy();
     }
   });
 
