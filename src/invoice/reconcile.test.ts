@@ -153,4 +153,27 @@ describe("source-backed invoice reconciliation",()=>{
     ]));
   });
 
+
+  it("reconciles a source-backed third-party pass-through without treating it as 0% VAT", () => {
+    const draft = makeDraft();
+    fieldsWithMoney(draft,"431,50","33,19","464,69");
+    draft.taxGroups = [
+      {rate:"7%",net:"390,00",tax:"27,30",evidenceIds:["7"]},
+      {rate:"19%",net:"31,00",tax:"5,89",evidenceIds:["19"]},
+    ];
+    draft.items = [item({
+      description:"Kurtaxe",quantity:"3",unitPrice:"3,50",amount:"10,50",
+      taxRate:null,evidenceIds:["printed-kurtaxe"],
+      taxTreatment:{kind:"third_party_no_vat",origin:"pdf",evidenceIds:["pass-through-note"]},
+    })];
+    expect(reconcileInvoice(draft)).toEqual([]);
+    expect(draft.items[0]?.taxRate).toBeNull();
+
+    draft.items[0]!.taxTreatment = undefined;
+    expect(reconcileInvoice(draft)).toEqual(expect.arrayContaining([
+      expect.objectContaining({id:"missing-tax-rates",severity:"review"}),
+      expect.objectContaining({id:"net-summary",severity:"review"}),
+    ]));
+  });
+
 });
