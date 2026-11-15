@@ -115,6 +115,7 @@ describe("source-based invoice recognition", () => {
   it("does not classify a Netto-Einzelpreis row as the invoice net total", () => {
     const draft = recognizeInvoice(pageLines(1, ["Netto-Einzelpreis 10,00", "Gesamtbetrag 119,00"]), 1);
     expect(draft.fields.netTotal).toBeNull();
+    expect(draft.items).toHaveLength(0);
     expect(draft.fields.grossTotal?.value).toBe("119,00");
   });
 
@@ -146,6 +147,9 @@ describe("source-based invoice recognition", () => {
     ], 2);
     expect(draft.fields.grossTotal).toBeNull();
     expect(draft.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/Widersprüchliche.*Brutto/i)]));
+    const conflict = draft.warnings.find(x => /Widersprüchliche.*Brutto/i.test(x));
+    expect(conflict).toContain("S. 1: 100,00");
+    expect(conflict).toContain("S. 2: 200,00");
   });
 
   it("accepts equivalent money totals across different locale formats", () => {

@@ -118,6 +118,8 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
     if (taxSummary.test(line.text)) continue;
 
     if (/\b(?:Summe|Total|Zwischensumme|Subtotal|Gesamt|Rechnung|Invoice)\b/i.test(line.text)) continue;
+    // A unit-price label is not an invoice position and must not inflate the sum.
+    if (/^\s*(?:Netto|Brutto)[-\s]*(?:Einzelpreis|Stückpreis|Unit\s*price)\b/i.test(line.text)) continue;
     const match = itemPattern.exec(line.text.trim());
     if (!match || parseCents(match[4] ?? "") === null ||
       (match[3] && parseCents(match[3]) === null)) continue;
@@ -135,7 +137,12 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
     if (!found?.length) continue;
     const first = found[0]!;
     if (found.some(candidate => !equivalent(label.key, first.value, candidate.value))) {
-      warnings.push("Widersprüchliche Angaben für " + FIELD_LABELS[label.key] + ": bitte Fundstellen im Original vergleichen.");
+      const references = found.map(candidate => {
+        const evidenceId = candidate.evidenceIds.at(-1);
+        const line = lines.find(source => source.id === evidenceId);
+        return "S. " + (line?.page ?? "?") + ": " + candidate.value;
+      }).join(" | ");
+      warnings.push("Widersprüchliche Angaben für " + FIELD_LABELS[label.key] + " (" + references + ").");
       fields[label.key] = null;
     } else fields[label.key] = first;
   }
