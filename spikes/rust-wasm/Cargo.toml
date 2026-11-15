@@ -1,0 +1,12 @@
+[package]
+name = "invoice-classifier"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+fasttext-pure-rs = { version = "=0.1.0", default-features = false }

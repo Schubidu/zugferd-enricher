@@ -1,0 +1,75 @@
+name: Rust WASM alternative feasibility spike
+on:
+  push:
+    branches:
+      - spike/issue-3-rust-wasm-no-emscripten
+permissions:
+  contents: read
+jobs:
+  rust-wasm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Rust 1.89 and bare WASM target (no Emscripten)
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          rustup target add wasm32-unknown-unknown --toolchain 1.89.0
+          rustc +1.89.0 --version
+      - name: Build pure Rust fastText WASM
+        run: |
+          cargo +1.89.0 build --release --target wasm32-unknown-unknown --manifest-path spikes/rust-wasm/Cargo.toml
+          cp spikes/rust-wasm/target/wasm32-unknown-unknown/release/invoice_classifier.wasm public/models/fasttext-rust-v1.wasm
+          ls -lh public/models/*.wasm public/models/*.ftz
+      - name: Install WebKit 27.2
+        run: |
+          mkdir -p /tmp/wasm-probe
+          cd /tmp/wasm-probe
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright
+          npx playwright install --with-deps webkit
+      - name: Test direct Rust WASM with strict CSP in WebKit
+        run: |
+          cat > /tmp/wasm-probe/probe.mjs <<'NODE'
+          import { createRequire } from 'node:module';
+          import { createServer } from 'node:http';
+          import { readFile } from 'node:fs/promises';
+          import { resolve } from 'node:path';
+          const require=createRequire(import.meta.url);
+          const {webkit}=require('playwright');
+          const mime=(name)=>name.endsWith('.wasm')?'application/wasm':
+            name.endsWith('.ftz')?'application/octet-stream':
+            name.endsWith('.js')?'text/javascript':'text/html';
+          const server=createServer(async(req,res)=>{
+            const path=req.url==='/probe.js'?'spikes/rust-wasm/probe.worker.js':
+              req.url?.startsWith('/models/')?'public'+req.url:null;
+            const bytes=path ? await readFile(resolve(path)).catch(()=>null) :
+              Buffer.from('<!doctype html><title>Rust WASM probe</title>');
+            res.writeHead(bytes?200:404,{
+              'Content-Type':mime(path||'.html'),
+              'Content-Security-Policy':"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; object-src 'none'",
+              'X-Content-Type-Options':'nosniff',
+            });
+            res.end(bytes||'Not found');
+          });
+          await new Promise(resolve=>server.listen(5199,'127.0.0.1',resolve));
+          const browser=await webkit.launch();
+          try {
+            const page=await browser.newPage();
+            await page.goto('http://127.0.0.1:5199/');
+            const results=await page.evaluate(()=>new Promise((resolve,reject)=>{
+              const worker=new Worker('/probe.js',{type:'module'});
+              worker.onmessage=event=>{worker.terminate();resolve(event.data)};
+              worker.onerror=event=>{worker.terminate();reject(Error(event.message))};
+              worker.postMessage({});
+              setTimeout(()=>reject(Error('Rust WASM worker timeout')),20000);
+            }));
+            console.log('RUST_WEBKIT_RESULT',JSON.stringify(results));
+            if(!results.ok||!results.count||results.predictions[0]?.category!==3) {
+              throw new Error('Rust WASM/WebKit cross-compatibility failed');
+            }
+          } finally {
+            await browser.close(); server.close();
+          }
+          NODE
+          node /tmp/wasm-probe/probe.mjs
