@@ -157,7 +157,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                       return (
                         <button
                           type="button" className="review-action" key={item.id}
-                          onClick={() => focusReviewSection("line-item-" + item.id, \'input[aria-label$=" Steuersatz"]\')}
+                          onClick={() => focusReviewSection("line-item-" + item.id, 'input[aria-label$=" Steuersatz"]')}
                         >
                           Position {index + 1}: {item.description} bearbeiten
                         </button>
@@ -165,7 +165,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                     })
                   ) : finding.id.startsWith("manual-item-") || finding.id.startsWith("quantity-") ? (
                     <button className="review-action" type="button"
-                      onClick={() => focusReviewSection("line-item-" + finding.id.replace(/^(?:manual-item-|quantity-)/, ""), \'input[aria-label$=" Betrag"]\')}>
+                      onClick={() => focusReviewSection("line-item-" + finding.id.replace(/^(?:manual-item-|quantity-)/, ""), 'input[aria-label$=" Betrag"]')}>
                       Betroffene Position bearbeiten
                     </button>
                   ) : finding.id === "net-summary" || finding.id === "tax-summary" ||
