@@ -1,0 +1,106 @@
+name: Temporary live WebKit diagnosis
+on:
+  push:
+    branches:
+      - feat/issue-3-local-classification-reconciliation
+permissions:
+  contents: read
+jobs:
+  browser-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PREVIEW_URL: https://feat-issue-3-local-classification-reconciliati.zugferd-enricher.schult.dev
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Verify Cloudflare preview and static model availability
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 30 --dump-header /tmp/preview-headers.txt --output /tmp/preview.html "$PREVIEW_URL/"
+          echo "== HTML response headers =="
+          grep -iE '^(HTTP/|content-type:|content-security-policy:|cf-cache-status:)' /tmp/preview-headers.txt || true
+          curl --fail --silent --show-error --location --max-time 30 --dump-header /tmp/model-headers.txt --output /tmp/invoice-categories-v1.ftz "$PREVIEW_URL/models/invoice-categories-v1.ftz"
+          echo "== Model response headers / size =="
+          grep -iE '^(HTTP/|content-type:|content-length:)' /tmp/model-headers.txt || true
+          wc -c /tmp/invoice-categories-v1.ftz
+      - name: Install isolated WebKit browser test dependencies
+        run: |
+          mkdir -p /tmp/diagnose
+          cd /tmp/diagnose
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright
+          npx playwright install --with-deps webkit
+      - name: Test local PDF parsing and fastText inside actual WebKit
+        run: |
+          cat > /tmp/diagnose/check.mjs <<'NODE'
+          import { createRequire } from 'node:module';
+          const require = createRequire(import.meta.url);
+          const { webkit } = require('playwright');
+          const url = process.env.PREVIEW_URL;
+          const encoder = new TextEncoder();
+
+          function syntheticPdf(lines) {
+            const objects = [
+              '<< /Type /Catalog /Pages 2 0 R >>',
+              '<< /Type /Pages /Kids [4 0 R] /Count 1 >>',
+              '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+            ];
+            const content = lines.map((line, i) =>
+              'BT /F1 12 Tf 50 ' + (740 - i*24) + ' Td (' +
+              line.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)') +
+              ') Tj ET\n'
+            ).join('');
+            objects.push(
+              '<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >>',
+              '<< /Length '+encoder.encode(content).length+' >>\nstream\n'+content+'endstream',
+            );
+            let out='%PDF-1.4\n';
+            const offsets=[0];
+            objects.forEach((body, i)=>{offsets.push(encoder.encode(out).length);out+=(i+1)+' 0 obj\n'+body+'\nendobj\n'});
+            const xref=encoder.encode(out).length;
+            out+='xref\n0 '+(objects.length+1)+'\n0000000000 65535 f \n';
+            for(const offset of offsets.slice(1))out+=String(offset).padStart(10,'0')+' 00000 n \n';
+            out+='trailer\n<< /Size '+(objects.length+1)+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF\n';
+            return Buffer.from(encoder.encode(out));
+          }
+
+          const browser=await webkit.launch({headless:true});
+          const page=await browser.newPage();
+          page.setDefaultTimeout(30000);
+          const responses=[];
+          const failures=[];
+          page.on('response', response=>{
+            const u=response.url();
+            if(/\.wasm(?:\?|$)|\.mjs(?:\?|$)|\.ftz(?:\?|$)|classifier\..*\.js(?:\?|$)/.test(u)){
+              responses.push({path:new URL(u).pathname,status:response.status(),type:response.headers()['content-type']});
+            }
+          });
+          page.on('requestfailed',req=>failures.push({path:new URL(req.url()).pathname,reason:req.failure()?.errorText}));
+          page.on('pageerror',error=>console.log('PAGE_ERROR',error.message.slice(0,450)));
+          try {
+            await page.goto(url+'/',{waitUntil:'networkidle',timeout:45000});
+            console.log('BROWSER',await browser.version(),'HTML_TITLE',await page.title());
+            const pdf=syntheticPdf([
+              'Rechnungsnummer: TEST-001',
+              'Mystery Zusatzleistung 10,00',
+              'Gesamtbetrag 10,00',
+            ]);
+            await page.locator('input[type="file"]').setInputFiles({name:'synthetic.pdf',mimeType:'application/pdf',buffer:pdf});
+            await page.getByRole('button',{name:'PDF lokal auslesen'}).click();
+            await page.getByRole('button',{name:'Positionen lokal klassifizieren'}).waitFor({timeout:30000});
+            await page.getByRole('button',{name:'Positionen lokal klassifizieren'}).click();
+            await page.waitForFunction(()=>{
+              const button=[...document.querySelectorAll('button')].find(x=>x.textContent?.includes('lokal klassifizieren'));
+              return !!button && !button.disabled;
+            },{timeout:45000});
+            const diagnostic=await page.locator('.classification-action [role="alert"]').allTextContents();
+            const sources=await page.locator('.category-origin').allTextContents();
+            console.log('BROWSER_CLASSIFICATION',JSON.stringify({diagnostic,sources,responses,failures}));
+            if(diagnostic.length)throw new Error('WebKit fastText model initialization failed: '+diagnostic.join(' '));
+          } finally {
+            await browser.close();
+          }
+          NODE
+          node /tmp/diagnose/check.mjs
