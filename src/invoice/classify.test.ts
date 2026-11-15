@@ -110,4 +110,29 @@ describe("conservative source-separated classification", () => {
     expect(item.taxRate).toBe("19%");
     expect(item.evidenceIds).toEqual(["page-1-line-1"]);
   });
+
+  it.each([
+    // Exactly the described line items in synthetic TEST-01 and TEST-02.
+    ["Beratungsleistung", "service"],
+    ["Designhandbuch Band A", "books"],
+    ["Fachbuch UI Patterns", "books"],
+    ["Monitorhalterung", "hardware"],
+    ["Installation vor Ort", "service"],
+    ["USB-C Hub", "hardware"],
+    ["Dokumentenmappe", "office_supplies"],
+  ])("offers an unconfirmed category for a general invoice line: %s", (description, expected) => {
+    const classification = classifyDescription(description);
+    expect(classification).toMatchObject({category: expected, source: "rule"});
+    expect(getCategoryReviewStatus(classification)).toBe("suggested");
+  });
+  it("keeps unknown separate from consciously selected other", () => {
+    const abstained = classifyDescription("X5 Zusatz", [
+      {category: "other", probability: 0.99},
+    ]);
+    expect(abstained).toMatchObject({category: "unknown", source: "abstain"});
+    expect(getCategoryReviewStatus(abstained)).toBe("unknown");
+    expect(getCategoryReviewStatus({category: "other", source: "manual", confidence: null})).toBe("confirmed");
+    expect(getCategoryReviewStatus({category: "unknown", source: "manual", confidence: null})).toBe("unknown");
+    expect(getCategoryReviewStatus({category: "parking", source: "fasttext", confidence: 0.99})).toBe("suggested");
+  });
 });
