@@ -3,7 +3,7 @@ import type { LineItem } from "./model";
 /** Categories suggest what a position describes, never a tax rate or money amount. */
 export const CATEGORY_IDS = [
   "accommodation", "food", "beverage", "parking", "city_tax",
-  "bundle", "other", "unknown",
+  "bundle", "service", "books", "hardware", "office_supplies", "other", "unknown",
 ] as const;
 export type Category = (typeof CATEGORY_IDS)[number];
 export type AssignedCategory = Exclude<Category, "unknown">;
@@ -14,6 +14,10 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   parking: "Parken",
   city_tax: "Kurtaxe / Beherbergungssteuer",
   bundle: "Paket / Mischleistung",
+  service: "Dienstleistungen",
+  books: "Bücher / Druckerzeugnisse",
+  hardware: "Hardware",
+  office_supplies: "Bürobedarf",
   other: "Sonstiges",
   unknown: "Unbekannt – prüfen",
 };
@@ -23,10 +27,40 @@ export type Classification = {
   confidence: number | null;
 };
 
+/** Classification confidence is not invoice provenance or fiscal validation. */
+export type CategoryReviewStatus = "unknown" | "suggested" | "confirmed";
+export const CATEGORY_REVIEW_STATUS_LABELS: Record<CategoryReviewStatus, string> = {
+  unknown: "Unbekannt – prüfen",
+  suggested: "Vorgeschlagen – nicht bestätigt",
+  confirmed: "Manuell zugeordnet",
+};
+
+export function getCategoryReviewStatus(classification: Classification): CategoryReviewStatus {
+  if (classification.category === "unknown") return "unknown";
+  return classification.source === "manual" ? "confirmed" : "suggested";
+}
+
 type Prediction = { category: string; probability: number };
 
 /** A very small high-precision fallback; conflicting keywords cause abstention. */
 const RULES: readonly { category: AssignedCategory; re: RegExp }[] = [
+  // Narrow non-hotel vocabulary: examples from synthetic TEST-01 and TEST-02.
+  {
+    category: "service",
+    re: /(?<![\p{L}\p{N}])(?:beratungsleistung|beratungsdienstleistung|installation[\s-]+vor[\s-]+ort|consulting[\s-]+services?)(?![\p{L}\p{N}])/iu,
+  },
+  {
+    category: "books",
+    re: /(?<![\p{L}\p{N}])(?:designhandbuch|fachbuch|lehrbuch)(?![\p{L}\p{N}])/iu,
+  },
+  {
+    category: "hardware",
+    re: /(?<![\p{L}\p{N}])(?:monitorhalterung|usb[\s-]*c[\s-]*hub|usb[\s-]*kabel(?:[\s-]*adapter)?)(?![\p{L}\p{N}])/iu,
+  },
+  {
+    category: "office_supplies",
+    re: /(?<![\p{L}\p{N}])(?:dokumentenmappe|büromaterial|aktenordner)(?![\p{L}\p{N}])/iu,
+  },
   {
     category: "accommodation",
     re: /(?<![\p{L}\p{N}])(?:übernachtung(?:en)?|übernachtungs(?:entgelt|preis)|zimmer(?:nacht|übernachtung|preis|rate)|logis|unterkunft|room[\s-]*(?:night|rate|charge)|accommodation|lodging)(?![\p{L}\p{N}])/iu,
@@ -58,7 +92,8 @@ const RULES: readonly { category: AssignedCategory; re: RegExp }[] = [
  * combined meal. An unqualified "Frühstück und Getränke" stays ambiguous.
  */
 const BREAKFAST_DRINKS = /^(?:frühstücks?[\s:-]*getränke(?:anteil)?|frühstück[\s-]*getränkeanteil|getränke(?:anteil)?[\s-]+(?:zum[\s-]+)?frühstück|breakfast[\s-]*(?:drinks?|beverages?))(?:\s+(?:am\s+)?\d{1,2}\.\d{1,2}\.(?:\d{2}|\d{4}))?$/iu;
-const supported = new Set<string>(CATEGORY_IDS.filter(id => id !== "unknown"));
+// "other" is a deliberate manual assignment, never a model catch-all.
+const supported = new Set<string>(CATEGORY_IDS.filter(id => id !== "unknown" && id !== "other"));
 const THRESHOLD = 0.83;
 const MIN_MARGIN = 0.2;
 
