@@ -19,9 +19,12 @@ function App() {
   const [loaded, setLoaded] = useState<LoadedInvoice | null>(null);
   const loadedRef = useRef<LoadedInvoice | null>(null);
   const generation = useRef(0);
+  const extractionController = useRef<AbortController | null>(null);
 
   useEffect(() => () => {
     generation.current++;
+    extractionController.current?.abort();
+    extractionController.current = null;
     if (loadedRef.current) void loadedRef.current.pdf.loadingTask.destroy();
     loadedRef.current = null;
   }, []);
@@ -37,11 +40,13 @@ function App() {
   async function readSelectedPdf() {
     if (!selectedFile || reading) return;
     const active = ++generation.current;
+    const controller = new AbortController();
+    extractionController.current = controller;
     setReading(true);
     setError(null);
     try {
       const { loadInvoicePdf } = await import("./invoice/pdf");
-      const result = await loadInvoicePdf(selectedFile);
+      const result = await loadInvoicePdf(selectedFile, controller.signal);
       if (generation.current !== active) {
         void result.pdf.loadingTask.destroy();
         return;
@@ -54,7 +59,10 @@ function App() {
         setError("Diese PDF konnte nicht ausgelesen werden. Bitte prüfe die Datei und versuche es erneut.");
       }
     } finally {
-      if (generation.current === active) setReading(false);
+      if (generation.current === active) {
+        extractionController.current = null;
+        setReading(false);
+      }
     }
   }
 
