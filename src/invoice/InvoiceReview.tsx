@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { FieldKey, InvoiceDraft, SourceLine } from "./model";
 import { FIELD_KEYS, FIELD_LABELS } from "./model";
-import { checkTotals, formatEuroCents, sumLineItemAmounts } from "./money";
+import { formatEuroCents, sumLineItemAmounts } from "./money";
 import PdfPreview from "./PdfPreview";
 import { CATEGORY_IDS, CATEGORY_LABELS, CATEGORY_REVIEW_STATUS_LABELS, classifyDescription, getCategoryReviewStatus } from "./classify";
 import type { Category, Classification } from "./classify";
@@ -48,12 +48,6 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
       returnFocusRef.current?.focus();
     };
   }, [inspectedEvidence]);
-  // Manual edits remain visible but cannot make PDF-backed reconciliation pass.
-  const totals = checkTotals(
-    draft.fields.netTotal?.origin === "pdf" ? draft.fields.netTotal.value : null,
-    draft.fields.taxTotal?.origin === "pdf" ? draft.fields.taxTotal.value : null,
-    draft.fields.grossTotal?.origin === "pdf" ? draft.fields.grossTotal.value : null,
-  );
   const positionSum = sumLineItemAmounts(draft.items);
   const categorySummary = summarizeCategories(draft.items, classifications);
   const unclassifiedCount = categorySummary.find(group => group.category === "unknown")?.count ?? 0;
@@ -146,18 +140,12 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
         <h2>Erkannte Rechnungsdaten</h2>
         <p>Dies ist ein prüfbarer Entwurf, keine berichtigte Rechnung. Erkannte Daten sind Vorschläge; manuelle Korrekturen gelten nicht als durch das Original belegt.</p>
       </div>
-      <section className="review-findings" aria-labelledby="reconciliation-heading">
-        <div className="review-findings-heading">
-          <h3 id="reconciliation-heading">Rechnerische Plausibilitätsprüfung</h3>
-          <span>{findings.length} {findings.length === 1 ? "Hinweis" : "Hinweise"}</span>
-        </div>
-        <p className="quiet">
-          Wähle eine Position zum Bearbeiten oder öffne die markierte Fundstelle direkt im Original.
-          Fehlende Steuerangaben werden nicht automatisch geschätzt.
-        </p>
-        {findings.length === 0 ? (
-          <p className="total-check match">Keine rechnerischen Abweichungen in den prüfbaren Angaben gefunden.</p>
-        ) : (
+      {findings.length > 0 && (
+        <section className="review-findings" aria-labelledby="reconciliation-heading">
+          <div className="review-findings-heading">
+            <h3 id="reconciliation-heading">Prüfhinweise</h3>
+            <span>{findings.length}</span>
+          </div>
           <ul className="reconciliation-findings">
             {findings.map(finding => (
               <li className={"reconciliation-" + finding.severity} key={finding.id}>
@@ -207,8 +195,8 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
       <div className="review-grid">
         <PdfPreview
           pdf={pdf}
@@ -241,11 +229,6 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                 );
               })}
             </div>
-            <p className={"total-check " + totals.status} role="status">
-              {totals.status === "match" ? "Netto + Umsatzsteuer = Brutto · rechnerisch konsistent" :
-                totals.status === "mismatch" ? "Widerspruch: Netto + Umsatzsteuer stimmt nicht mit Brutto überein." :
-                  "Summen nicht vollständig prüfbar. Fehlende Werte werden nicht geschätzt."}
-            </p>
           </section>
           <section className="data-card" aria-labelledby="line-items-heading">
             <h3 id="line-items-heading">Rechnungspositionen</h3>
