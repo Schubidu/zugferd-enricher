@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { FieldKey, InvoiceDraft, SourceLine } from "./model";
 import { FIELD_KEYS, FIELD_LABELS } from "./model";
 import { checkTotals, formatEuroCents, sumLineItemAmounts } from "./money";
 import PdfPreview from "./PdfPreview";
+import { CATEGORY_IDS, CATEGORY_LABELS, classifyDescription } from "./classify";
+import type { Category, Classification } from "./classify";
+import { reconcileInvoice } from "./reconcile";
 
 type Props = {
   pdf: PDFDocumentProxy;
@@ -13,12 +16,49 @@ type Props = {
 export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
   const [page, setPage] = useState(1);
   const [activeEvidenceId, setActiveEvidenceId] = useState<string | null>(null);
+  const [classifications, setClassifications] = useState<Record<string, Classification>>({});
+  const [classifying, setClassifying] = useState(false);
+  const [classificationError, setClassificationError] = useState<string | null>(null);
+  const classificationController = useRef<AbortController | null>(null);
+  useEffect(() => () => classificationController.current?.abort(), []);
   const totals = checkTotals(
     draft.fields.netTotal?.value ?? null,
     draft.fields.taxTotal?.value ?? null,
     draft.fields.grossTotal?.value ?? null,
   );
   const positionSum = sumLineItemAmounts(draft.items);
+  const findings = reconcileInvoice(draft);
+
+  async function runClassification() {
+    classificationController.current?.abort();
+    const controller = new AbortController();
+    classificationController.current = controller;
+    setClassifying(true);
+    setClassificationError(null);
+    try {
+      const { classifyLocally } = await import("./classify-client");
+      if (controller.signal.aborted) return;
+      const predicted = await classifyLocally(draft.items, controller.signal);
+      if (!controller.signal.aborted) {
+        setClassifications(previous => ({
+          ...predicted,
+          ...Object.fromEntries(Object.entries(previous).filter(([, entry]) => entry.source === "manual")),
+        }));
+      }
+    } catch {
+      if (!controller.signal.aborted) setClassificationError(
+        "Das lokale fastText-Modell konnte nicht geladen werden. Regelbasierte Vorschläge bleiben verfügbar.",
+      );
+    } finally {
+      if (!controller.signal.aborted) setClassifying(false);
+    }
+  }
+
+  function setCategory(id: string, category: Category) {
+    setClassifications(previous => ({
+      ...previous, [id]: {category, source:"manual",confidence:null},
+    }));
+  }
   function focusEvidence(id: string) {
     const line = draft.sourceLines.find(x => x.id === id);
     if (line) {
@@ -37,6 +77,13 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
     });
   }
   function updateItem(id: string, key: "description" | "amount" | "taxRate", value: string) {
+    if (key === "description") {
+      setClassifications(previous => {
+        const next = {...previous};
+        delete next[id];
+        return next;
+      });
+    }
     onDraftChange({
       ...draft,
       items: draft.items.map(item => item.id === id ? {...item, [key]: value, origin: "manual"} : item),
@@ -97,9 +144,22 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
           </section>
           <section className="data-card" aria-labelledby="line-items-heading">
             <h3 id="line-items-heading">Rechnungspositionen</h3>
+            <div className="classification-action">
+              <button type="button" onClick={() => void runClassification()}
+                disabled={classifying || draft.items.length === 0}>
+                {classifying ? "Lokales Modell läuft…" : "Positionen lokal klassifizieren"}
+              </button>
+              <p className="quiet">
+                Vorschläge aus Regeln und optionalem fastText-WASM-Modell.
+                Keine Weitergabe deiner Rechnung; die Kategorie legt weder Steuer noch Betrag fest.
+              </p>
+              {classificationError && <p role="alert" className="error">{classificationError}</p>}
+            </div>
             {draft.items.length === 0 ? <p className="quiet">Keine eindeutig strukturierten Positionen erkannt. Bitte Original prüfen.</p> : (
               <div className="line-items">
-                {draft.items.map((item, index) => (
+                {draft.items.map((item, index) => {
+                  const assigned = classifications[item.id] ?? classifyDescription(item.description);
+                  return (
                   <div className="line-item" key={item.id}>
                     <div className="line-item-title"><strong>Position {index + 1}</strong>{sourceButton(draft.sourceLines,item.evidenceIds)}</div>
                     <label>Beschreibung
@@ -117,10 +177,24 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                           onChange={event => updateItem(item.id,"taxRate",event.currentTarget.value)}/>
                       </label>
                     </div>
+                    <label className="category-field">Kategorie (Vorschlag)
+                      <select aria-label={"Position " + (index+1) + " Kategorie"}
+                        value={assigned.category}
+                        onChange={event => setCategory(item.id,event.currentTarget.value as Category)}>
+                        {CATEGORY_IDS.map(id => <option key={id} value={id}>{CATEGORY_LABELS[id]}</option>)}
+                      </select>
+                    </label>
+                    <p className="category-origin">
+                      {assigned.source === "manual" ? "Manuell gewählt" :
+                        assigned.source === "rule" ? "Regelbasierter Vorschlag" :
+                          assigned.source === "fasttext" ? "Lokaler fastText-Vorschlag · " +
+                            Math.round((assigned.confidence ?? 0)*100) + " % Modellwahrscheinlichkeit" :
+                            "Keine sichere Zuordnung"}
+                    </p>
                     {item.quantity && <p className="quiet">Menge: {item.quantity}{item.unitPrice ? " · Einzelpreis: " + item.unitPrice : ""}</p>}
                     {item.origin === "manual" && <p className="manual-warning">Manuelle Änderung – mit Original abgleichen.</p>}
                   </div>
-                ))}
+                );})}
               </div>
             )}
             <div className="position-sum" role="status" aria-live="polite">
@@ -141,6 +215,25 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                 Deshalb ist dies kein automatischer Abgleich mit dem Rechnungsbetrag.
               </p>
             </div>
+          </section>
+          <section className="data-card" aria-labelledby="reconciliation-heading">
+            <h3 id="reconciliation-heading">Rechnerische Plausibilitätsprüfung</h3>
+            <p className="quiet">
+              Vergleicht ausschließlich explizit belegte Beträge und Steuersätze.
+              Die Kategorien werden nicht verwendet, um Steueranteile zu schätzen.
+            </p>
+            {findings.length === 0 ? (
+              <p className="total-check match">Keine rechnerischen Abweichungen in den prüfbaren Angaben gefunden.</p>
+            ) : (
+              <ul className="reconciliation-findings">
+                {findings.map(finding => (
+                  <li className={"reconciliation-" + finding.severity} key={finding.id}>
+                    <span>{finding.message}</span>
+                    {sourceButton(draft.sourceLines,finding.evidenceIds)}
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
           <section className="data-card" aria-labelledby="tax-groups-heading">
             <h3 id="tax-groups-heading">Ausgewiesene Steuergruppen</h3>
