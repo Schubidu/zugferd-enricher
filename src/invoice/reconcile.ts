@@ -70,7 +70,7 @@ export function reconcileInvoice(draft: InvoiceDraft): Finding[] {
     findings.push({
       id:"tax-breakdown",severity:"review",
       message:"Es sind keine ausgewiesenen Steuergruppen erkennbar. Eine Aufteilung kann nicht berechnet werden.",
-      evidenceIds:draft.fields.taxTotal.evidenceIds,
+      evidenceIds:(draft.fields.taxTotal?.evidenceIds ?? []),
     });
   }
 
@@ -85,7 +85,7 @@ export function reconcileInvoice(draft: InvoiceDraft): Finding[] {
           message:"Die erkannten Steuergruppen ergeben nicht die ausgewiesene Gesamtsteuer; weitere Gruppen könnten fehlen.",
           evidenceIds:[
             ...draft.taxGroups.flatMap(g => g.evidenceIds),
-            ...draft.fields.taxTotal.evidenceIds,
+            ...(draft.fields.taxTotal?.evidenceIds ?? []),
           ],
         });
       }
