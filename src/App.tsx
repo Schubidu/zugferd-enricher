@@ -1,4 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import InvoiceReview from "./invoice/InvoiceReview";
+import type { LoadedInvoice } from "./invoice/pdf";
 import type { ChangeEvent, DragEvent } from "react";
 import { formatFileSize, validatePdfSelection } from "./pdf-selection";
 import type { PdfSelectionError } from "./pdf-selection";
@@ -13,9 +15,52 @@ function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+  const [loaded, setLoaded] = useState<LoadedInvoice | null>(null);
+  const loadedRef = useRef<LoadedInvoice | null>(null);
+  const generation = useRef(0);
+
+  useEffect(() => () => {
+    generation.current++;
+    if (loadedRef.current) void loadedRef.current.pdf.destroy();
+    loadedRef.current = null;
+  }, []);
+
+  function clearLoaded() {
+    generation.current++;
+    if (loadedRef.current) void loadedRef.current.pdf.destroy();
+    loadedRef.current = null;
+    setLoaded(null);
+    setReading(false);
+  }
+
+  async function readSelectedPdf() {
+    if (!selectedFile || reading) return;
+    const active = ++generation.current;
+    setReading(true);
+    setError(null);
+    try {
+      const { loadInvoicePdf } = await import("./invoice/pdf");
+      const result = await loadInvoicePdf(selectedFile);
+      if (generation.current !== active) {
+        void result.pdf.destroy();
+        return;
+      }
+      if (loadedRef.current) void loadedRef.current.pdf.destroy();
+      loadedRef.current = result;
+      setLoaded(result);
+    } catch {
+      if (generation.current === active) {
+        setError("Diese PDF konnte nicht ausgelesen werden. Bitte prüfe die Datei und versuche es erneut.");
+      }
+    } finally {
+      if (generation.current === active) setReading(false);
+    }
+  }
 
   function selectFile(file: File | null) {
     if (!file) return;
+    clearLoaded();
     // Always reset the native picker so the same file can be reselected after a drop.
     if (inputRef.current) inputRef.current.value = "";
     const reason = validatePdfSelection(file);
@@ -38,6 +83,7 @@ function App() {
   }
 
   function resetSelection() {
+    clearLoaded();
     setSelectedFile(null);
     setError(null);
     if (inputRef.current) inputRef.current.value = "";
@@ -98,13 +144,30 @@ function App() {
               </button>
             </div>
           )}
+          {selectedFile && (
+            <button
+              type="button"
+              className="read-button"
+              disabled={reading}
+              onClick={() => void readSelectedPdf()}
+            >
+              {reading ? "PDF wird lokal ausgelesen…" : "PDF lokal auslesen"}
+            </button>
+          )}
         </section>
         <p className="scope-note">
-          <strong>Projektstand:</strong> Die lokale PDF-Auswahl funktioniert bereits.
-          Das Auslesen, Prüfen und Anreichern folgen in den nächsten Issues.
+          <strong>Projektstand:</strong> Text-PDFs werden lokal ausgelesen; die erkannten Angaben sind überprüfbare Vorschläge.
+          OCR für gescannte Dokumente, automatische Klassifizierung und ZUGFeRD-Anreicherung folgen in den nächsten Issues.
         </p>
       </section>
 
+      {loaded && (
+        <InvoiceReview
+          pdf={loaded.pdf}
+          draft={loaded.draft}
+          onDraftChange={draft => setLoaded(current => current ? {...current, draft} : current)}
+        />
+      )}
       <section className="steps" aria-label="Geplanter Ablauf">
         <div className="step"><span className="step-number">01</span><h3>Auslesen</h3><p>Texte und Rechnungspositionen direkt aus PDFs erkennen.</p></div>
         <div className="step"><span className="step-number">02</span><h3>Prüfen</h3><p>Beträge und Steuergruppen nachvollziehbar abgleichen.</p></div>
