@@ -106,16 +106,13 @@ function App() {
           <span className="wordmark-icon" aria-hidden="true">ZE</span>
           <span>ZUGFeRD <strong>Enricher</strong></span>
         </a>
-        <span className="privacy-label"><span aria-hidden="true">●</span> Browser-only</span>
       </header>
 
-      <section className="hero" aria-labelledby="main-heading">
-        <div className="eyebrow">LOCAL-FIRST · OPEN SOURCE</div>
-        <h1 id="main-heading">Rechnungen verstehen.<br /><span>Daten kontrollieren.</span></h1>
-        <p className="lead">
-          Analysiere bestehende PDF-Rechnungen direkt in deinem Browser.
-          Die spätere ZUGFeRD-Anreicherung erzeugt eine separate Kopie – dein Original bleibt unverändert.
-        </p>
+      <section className={loaded ? "hero hero--reviewing" : "hero"} aria-labelledby="main-heading">
+        <h1 id="main-heading">PDF-Rechnung lokal prüfen</h1>
+        {!loaded && (
+          <p className="lead">Rechnungspositionen und Beträge auslesen und mit dem Original abgleichen.</p>
+        )}
 
         <section
           className="upload-panel"
@@ -123,15 +120,17 @@ function App() {
           onDragOver={(event) => event.preventDefault()}
           onDrop={handleDrop}
         >
-          <div className="file-mark" aria-hidden="true">
-            <svg viewBox="0 0 48 48" width="42" height="42" fill="none">
-              <path d="M12 5h17l9 9v28H12V5Z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
-              <path d="M29 5v10h9M18 29h14M18 34h10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-            </svg>
-          </div>
-          <h2>Wähle deine Rechnung</h2>
-          <p>PDF hier ablegen oder eine Datei auswählen</p>
-          <label className="file-button" htmlFor="invoice-pdf">PDF auswählen</label>
+          {!loaded && (
+            <div className="file-mark" aria-hidden="true">
+              <svg viewBox="0 0 48 48" width="42" height="42" fill="none">
+                <path d="M12 5h17l9 9v28H12V5Z" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
+                <path d="M29 5v10h9M18 29h14M18 34h10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              </svg>
+            </div>
+          )}
+          <h2>{loaded ? "Ausgewählte Rechnung" : "Wähle deine Rechnung"}</h2>
+          {!loaded && <p>PDF hier ablegen oder eine Datei auswählen</p>}
+          <label className="file-button" htmlFor="invoice-pdf">{loaded ? "Andere PDF auswählen" : "PDF auswählen"}</label>
           <input
             ref={inputRef}
             className="file-input"
@@ -154,7 +153,7 @@ function App() {
               </button>
             </div>
           )}
-          {selectedFile && (
+          {selectedFile && !loaded && (
             <button
               type="button"
               className="read-button"
@@ -165,10 +164,9 @@ function App() {
             </button>
           )}
         </section>
-        <p className="scope-note">
-          <strong>Projektstand:</strong> Text-PDFs werden lokal ausgelesen; die erkannten Angaben sind überprüfbare Vorschläge.
-          OCR für gescannte Dokumente, automatische Klassifizierung und ZUGFeRD-Anreicherung folgen in den nächsten Issues.
-        </p>
+        {!loaded && (
+          <p className="scope-note">OCR für gescannte PDFs und der ZUGFeRD-Export sind noch nicht verfügbar.</p>
+        )}
       </section>
 
       {loaded && (
@@ -179,14 +177,9 @@ function App() {
           onDraftChange={draft => setLoaded(current => current ? {...current, draft} : current)}
         />
       )}
-      <section className="steps" aria-label="Geplanter Ablauf">
-        <div className="step"><span className="step-number">01</span><h3>Auslesen</h3><p>Texte und Rechnungspositionen direkt aus PDFs erkennen.</p></div>
-        <div className="step"><span className="step-number">02</span><h3>Prüfen</h3><p>Beträge und Steuergruppen nachvollziehbar abgleichen.</p></div>
-        <div className="step"><span className="step-number">03</span><h3>Anreichern</h3><p>Optional eine validierte ZUGFeRD-Verarbeitungskopie erzeugen.</p></div>
-      </section>
 
       <footer className="footer">
-        <span>Kein Upload. Keine Reisekostenabrechnung. Kein Ersatz für die Originalrechnung.</span>
+        <span>Keine Reisekostenabrechnung. Originalrechnung bleibt unverändert.</span>
         <a href="https://github.com/Schubidu/zugferd-enricher" rel="noreferrer" target="_blank">Quellcode auf GitHub</a>
       </footer>
     </main>
