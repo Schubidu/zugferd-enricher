@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SourceLine } from "./model";
 import { recognizeInvoice } from "./recognize";
-import { checkTotals } from "./money";
+import { checkTotals, parseCents } from "./money";
 
 function pageLines(page: number, entries: string[]): SourceLine[] {
   return entries.map((text, index) => ({
