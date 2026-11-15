@@ -47,7 +47,7 @@ describe("position sum in the browser invoice review", () => {
   it("does not show a misleading partial sum after an invalid manual amount", () => {
     render(<Harness />);
     fireEvent.change(screen.getByRole("textbox", { name: "Position 5 Betrag" }), { target: { value: "invalid" } });
-    expect(screen.getByText("Nicht berechenbar")).toBeInTheDocument();
+    expect(screen.getAllByText("Nicht berechenbar")).toHaveLength(2);
     expect(screen.getByText(/1 Betragsangabe\(n\) sind ungültig/i)).toBeInTheDocument();
     expect(screen.queryByText("431,50 €")).not.toBeInTheDocument();
   });
