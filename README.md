@@ -2,7 +2,7 @@
 
 Local-first, privacy-friendly tool to analyze, validate, and enrich existing PDF invoices with ZUGFeRD data.
 
-> **Project stage – Issue #2:** Text-based PDFs can now be read locally with PDF.js. Extracted data are source-linked candidates, not validated invoices. OCR, comprehensive tax validation, classification and ZUGFeRD export are not implemented.
+> **Project stage – Issue #3:** Text-based PDFs are read locally with PDF.js. Basic classification suggestions and source-backed arithmetic checks are available. OCR, complete tax validation and ZUGFeRD export are not implemented.
 
 ## What this project will do
 
@@ -75,3 +75,17 @@ MIT (see LICENSE). Future model weights, WASM runtimes, XML schemas and conforma
 - Scans and image-only PDFs show an OCR-needed warning (planned separately in issue #4).
 - The source PDF is unchanged; the parsed PDF worker/document is released when the user changes or removes the file. No export/rewriting is performed.
 - Security boundaries: no PDF scripts are executed for invoice logic; PDF.js text worker runs locally, with evaluation disabled. Inspect the network panel to verify only the app's static assets load.
+
+
+## Local classification and reconciliation (Issue #3)
+
+- Positions are categorized as accommodation, food, drinks, parking, city tax, bundled services, other, or **unknown**. Categories are review aids, not tax rates, expenditure categories, accounting truth, or claims that the original invoice was corrected.
+- High-precision keyword rules run instantly. The button **"Positionen lokal klassifizieren"** optionally loads a small, quantized, locally hosted fastText **WASM** model for uncertain descriptions. It runs inside a Web Worker; model, runtime and source PDF are not sent to any remote inference service.
+- The model is trained **only from deterministic synthetic phrase templates** using \`scripts/train_fasttext.py\` and fastText 0.9.3. Reproduce with \`python -m pip install fasttext==0.9.3\` then \`python scripts/train_fasttext.py\`; the resulting \`public/models/invoice-categories-v1.ftz\` is served as a static versioned Cloudflare asset. This is **not** trained on real invoice data and the synthetic benchmark is not a claim of production accuracy.
+- fastText suggestions are shown only at model probability ≥83% and at least 20 percentage points ahead of the runner-up. If evidence is conflicting, incomplete or uncertain, the category stays **unknown**. Explicit matching rules and any user manual selection take priority.
+- A manual category selection does **not** change tax rates, tax groups, original descriptions, amounts or provenance. Any edited description invalidates its previous classifier suggestion.
+- A separate deterministic check compares **printed** net + VAT against gross, **printed** tax-group net × printed rate against printed tax (1-cent tolerance for ordinary rounding), and printed quantity × printed unit-price against printed line total. Unstated VAT allocations and mixed-rate package splits are never invented. Tax-group coverage gaps are flagged for review rather than automatically classified as invoice errors.
+- No large OCR or VLM download is needed to read born-digital PDFs. An invoice can be opened and checked without loading fastText at all. Training/model downloads are independent of normal file selection.
+- The current parser still handles only a subset of invoice layouts and cannot establish that every item was recognized. Invoices with missing or conflicting fields must be reviewed manually before any future export.
+
+**Model provenance:** the browser runtime [DreamOfIce/fasttext.wasm](https://github.com/DreamOfIce/fasttext.wasm) is MIT licensed; the upstream fastText documentation is at [fasttext.cc](https://fasttext.cc/docs/en/webassembly-module.html). Model data are project-generated synthetic examples. This project's model size, download latency and license review should be measured on an actual Cloudflare preview before merging.
