@@ -37,46 +37,55 @@ export function groupTextFragments(fragments: TextFragment[], page: number): Sou
   }).filter(x => x.text.length > 0);
 }
 
-/** File bytes never leave the browser. The document is not modified or uploaded. */
-export async function loadInvoicePdf(file: File): Promise<LoadedInvoice> {
+/** File bytes stay in the browser. Abort destroys the in-flight PDF.js worker immediately. */
+export async function loadInvoicePdf(file: File, signal?: AbortSignal): Promise<LoadedInvoice> {
+  function checkAbort() {
+    if (signal?.aborted) throw new DOMException("PDF extraction cancelled", "AbortError");
+  }
+
+  checkAbort();
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  checkAbort();
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
   const sourceBytes = new Uint8Array(await file.arrayBuffer());
-  const loading = pdfjs.getDocument({
-    data: sourceBytes,
-    useSystemFonts: true,
-  });
+  checkAbort();
+  const loading = pdfjs.getDocument({ data: sourceBytes, useSystemFonts: true });
+  const cancelTask = () => { void loading.destroy().catch(() => undefined); };
+  signal?.addEventListener("abort", cancelTask, { once: true });
+
   try {
+    checkAbort();
     const pdf = await loading.promise;
     const lines: SourceLine[] = [];
-    try {
-      for (let pageNumber=1; pageNumber<=pdf.numPages; pageNumber++) {
-        const page = await pdf.getPage(pageNumber);
-        const viewport = page.getViewport({scale: 1});
-        const content = await page.getTextContent();
-        const fragments: TextFragment[] = [];
-        for (const item of content.items) {
-          if (!("str" in item) || !item.str.trim()) continue;
-          const transform = pdfjs.Util.transform(viewport.transform, item.transform);
-          const height = Math.max(1, Math.hypot(transform[2], transform[3]));
-          fragments.push({
-            text: item.str,
-            x: clamp(transform[4] / viewport.width),
-            y: clamp((transform[5]-height)/viewport.height),
-            width: clamp(Math.abs(item.width)/viewport.width),
-            height: clamp(height/viewport.height),
-          });
-        }
-        lines.push(...groupTextFragments(fragments, pageNumber));
-        page.cleanup();
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+      checkAbort();
+      const page = await pdf.getPage(pageNumber);
+      checkAbort();
+      const viewport = page.getViewport({ scale: 1 });
+      const content = await page.getTextContent();
+      checkAbort();
+      const fragments: TextFragment[] = [];
+      for (const item of content.items) {
+        if (!("str" in item) || !item.str.trim()) continue;
+        const transform = pdfjs.Util.transform(viewport.transform, item.transform);
+        const height = Math.max(1, Math.hypot(transform[2], transform[3]));
+        fragments.push({
+          text: item.str,
+          x: clamp(transform[4] / viewport.width),
+          y: clamp((transform[5] - height) / viewport.height),
+          width: clamp(Math.abs(item.width) / viewport.width),
+          height: clamp(height / viewport.height),
+        });
       }
-      return { pdf, draft: recognizeInvoice(lines, pdf.numPages) };
-    } catch (e) {
-      await pdf.loadingTask.destroy();
-      throw e;
+      lines.push(...groupTextFragments(fragments, pageNumber));
+      page.cleanup();
     }
+    checkAbort();
+    return { pdf, draft: recognizeInvoice(lines, pdf.numPages) };
   } catch (error) {
     await loading.destroy();
     throw error;
+  } finally {
+    signal?.removeEventListener("abort", cancelTask);
   }
 }
