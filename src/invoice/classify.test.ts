@@ -22,6 +22,46 @@ const examples: Array<[string,string]> = [
   ["Beherbergungssteuer", "city_tax"],
   ["Business Paket", "bundle"],
   ["Arrangement", "bundle"],
+
+  // Common German and English hotel invoice wording, with conservative scope.
+  ["Zimmerübernachtung", "accommodation"],
+  ["Zimmerpreis Einzelzimmer", "accommodation"],
+  ["Übernachtungsentgelt", "accommodation"],
+  ["Room charge", "accommodation"],
+  ["Unterkunft", "accommodation"],
+  ["Business Lunch", "food"],
+  ["Meeting-Lunch", "food"],
+  ["Seminarlunch", "food"],
+  ["Mittagsmenü", "food"],
+  ["Tagesgericht", "food"],
+  ["Abendmenü", "food"],
+  ["Frühstück Essen", "food"],
+  ["Frühstücksspeisen", "food"],
+  ["Frühstück-Getränke", "beverage"],
+  ["Frühstück: Getränke", "beverage"],
+  ["Frühstück Getränkeanteil", "beverage"],
+  ["Getränke zum Frühstück", "beverage"],
+  ["Getränkeanteil Frühstück", "beverage"],
+  ["Breakfast beverages", "beverage"],
+  ["Cappuccino", "beverage"],
+  ["Espresso", "beverage"],
+  ["Latte Macchiato", "beverage"],
+  ["Orangensaft", "beverage"],
+  ["Parkgebühr", "parking"],
+  ["Parkplatzmiete", "parking"],
+  ["Stellplatzgebühr", "parking"],
+  ["Tiefgarage", "parking"],
+  ["City-Tax", "city_tax"],
+  ["Übernachtungssteuer", "city_tax"],
+  ["Touristensteuer", "city_tax"],
+  ["Kulturförderabgabe", "city_tax"],
+  ["Kurbeitrag", "city_tax"],
+  ["Gästebeitrag", "city_tax"],
+  ["Tagungspauschale", "bundle"],
+  ["Halbpension", "bundle"],
+  ["Vollpension", "bundle"],
+  ["Frühstückspauschale", "bundle"],
+
 ];
 describe("conservative source-separated classification", () => {
   it.each(examples)("applies explicit high-precision rules: %s", (text, expected) => {
@@ -31,6 +71,16 @@ describe("conservative source-separated classification", () => {
     expect(classifyDescription("Frühstück und Getränke").category).toBe("unknown");
     expect(classifyDescription("Frühstück Getränke und Speisen").category).toBe("unknown");
     expect(classifyDescription("Lunch und Getränke").category).toBe("unknown");
+
+    // Do not incorrectly assume that a mixed arrangement is a single tax group.
+    expect(classifyDescription("Übernachtung inkl. Frühstück").category).toBe("unknown");
+    expect(classifyDescription("Konferenzlunch und Getränke").category).toBe("unknown");
+    expect(classifyDescription("Business Lunch mit Cappuccino").category).toBe("unknown");
+    expect(classifyDescription("Frühstück Speisen und Getränke").category).toBe("unknown");
+    // Word boundaries matter: a word containing "wein" or "lunch" is not automatically a drink or meal.
+    expect(classifyDescription("Schweinefilet Zusatzposten").category).toBe("unknown");
+    expect(classifyDescription("Lunchtime Konferenzservice").category).toBe("unknown");
+
     expect(classifyDescription("X5 Zusatz")).toMatchObject({category:"unknown",source:"abstain"});
   });
   it("accepts a confident, unambiguous local model prediction", () => {

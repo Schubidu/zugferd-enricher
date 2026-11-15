@@ -27,16 +27,37 @@ type Prediction = { category: string; probability: number };
 
 /** A very small high-precision fallback; conflicting keywords cause abstention. */
 const RULES: readonly { category: AssignedCategory; re: RegExp }[] = [
-  {category: "accommodation", re: /(?<![\p{L}\p{N}])(?:übernachtung(?:en)?|zimmernacht|logis|room\s*(?:night|rate)|accommodation|lodging)(?![\p{L}\p{N}])/iu},
-  {category: "food", re: /(?<![\p{L}\p{N}])(?:frühstück(?:sspeisen)?|breakfast\s*(?:food|meal)|abendessen|mittagessen|dinner|(?:konferenz|tagungs|seminar)[\s-]*lunch|lunch|speisen|mahlzeit|restaurant\s*meal)(?![\p{L}\p{N}])/iu},
-  {category: "beverage", re: /(?<![\p{L}\p{N}])(?:getränke?|drinks?|wasserflasche|softdrink|coffee|kaffee|tea|bier|wein|beverage|mineralwasser)(?![\p{L}\p{N}])/iu},
-  {category: "parking", re: /(?<![\p{L}\p{N}])(?:park(?:en|platz|gebühr|haus|ticket)|parking|garage\s*fee)(?![\p{L}\p{N}])/iu},
-  {category: "city_tax", re: /(?<![\p{L}\p{N}])(?:kurtaxe|city\s*tax|tourism\s*levy|beherbergungssteuer|bettensteuer|ortstaxe|tourismusabgabe)(?![\p{L}\p{N}])/iu},
-  {category: "bundle", re: /(?<![\p{L}\p{N}])(?:business\s*paket|arrangement|package|bundle|kombipaket|pauschale)(?![\p{L}\p{N}])/iu},
+  {
+    category: "accommodation",
+    re: /(?<![\p{L}\p{N}])(?:übernachtung(?:en)?|übernachtungs(?:entgelt|preis)|zimmer(?:nacht|übernachtung|preis|rate)|logis|unterkunft|room[\s-]*(?:night|rate|charge)|accommodation|lodging)(?![\p{L}\p{N}])/iu,
+  },
+  {
+    category: "food",
+    re: /(?<![\p{L}\p{N}])(?:frühstück(?:sspeisen|sessen)?|breakfast[\s-]*(?:food|meal)|abendessen|mittagessen|mittagsmenü|abendmenü|tagesgericht|dinner|(?:konferenz|tagungs?|seminar|business|meeting)[\s-]*(?:lunch|mittagessen)|lunch(?:menü)?|speisen|mahlzeit|restaurant[\s-]*meal)(?![\p{L}\p{N}])/iu,
+  },
+  {
+    category: "beverage",
+    re: /(?<![\p{L}\p{N}])(?:getränke?(?:anteil)?|drinks?|wasserflasche|softdrinks?|coffee|kaffee(?:spezialität)?|espresso|cappuccino|latte[\s-]*macchiato|tea|tee|bier|wein|beverages?|mineralwasser|orangensaft|apfelsaft)(?![\p{L}\p{N}])/iu,
+  },
+  {
+    category: "parking",
+    re: /(?<![\p{L}\p{N}])(?:park(?:en|platz(?:miete)?|gebühr|haus|ticket|dauer)|parking|garage[\s-]*fee|tiefgarage|stellplatz(?:gebühr)?)(?![\p{L}\p{N}])/iu,
+  },
+  {
+    category: "city_tax",
+    re: /(?<![\p{L}\p{N}])(?:kurtaxe|city[\s-]*tax|tourism[\s-]*levy|beherbergungssteuer|bettensteuer|ortstaxe|tourismusabgabe|touristensteuer|übernachtungssteuer|kulturförderabgabe|gästebeitrag|kurbeitrag)(?![\p{L}\p{N}])/iu,
+  },
+  {
+    category: "bundle",
+    re: /(?<![\p{L}\p{N}])(?:business[\s-]*paket|arrangement|package|bundle|kombipaket|(?:frühstücks?|tagungs?|hotel|seminar)[\s-]*pauschale|pauschale|halbpension|vollpension|(?:hotel|frühstücks?)[\s-]*paket|inklusivpaket)(?![\p{L}\p{N}])/iu,
+  },
 ];
-// Explicit line-item component labels override the broad "Frühstück" keyword.
-// Match the entire description to avoid silently treating mixed meals as drinks.
-const BREAKFAST_DRINKS = /^(?:frühstück[\s-]+getränke|frühstücksgetränke|breakfast[\s-]+(?:drinks?|beverages?))(?:\s+\d{1,2}\.\d{1,2}\.(?:\d{2}|\d{4}))?$/iu;
+
+/**
+ * These exact component labels explicitly mean breakfast *drinks*, not a
+ * combined meal. An unqualified "Frühstück und Getränke" stays ambiguous.
+ */
+const BREAKFAST_DRINKS = /^(?:frühstücks?[\s-]*getränke(?:anteil)?|frühstück[\s-]*getränkeanteil|getränke(?:anteil)?[\s-]+(?:zum[\s-]+)?frühstück|breakfast[\s-]*(?:drinks?|beverages?))(?:\s+(?:am\s+)?\d{1,2}\.\d{1,2}\.(?:\d{2}|\d{4}))?$/iu;
 const supported = new Set<string>(CATEGORY_IDS.filter(id => id !== "unknown"));
 const THRESHOLD = 0.83;
 const MIN_MARGIN = 0.2;
