@@ -9,9 +9,9 @@ type WorkerResponse = {
   error?: ModelErrorCode;
 };
 
-/** Worker and quantized model load only after explicit user action. */
+/** Worker and quantized model load only for unresolved descriptions. */
 export async function classifyLocally(
-  items: readonly LineItem[],
+  items: readonly Pick<LineItem, "id" | "description">[],
   signal: AbortSignal,
 ): Promise<Record<string, Classification>> {
   if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
