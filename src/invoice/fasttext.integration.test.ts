@@ -19,6 +19,12 @@ describe("pure-Rust WASM and quantized model compatibility", () => {
     expect(food[0]?.category).toBe("food");
     expect(drinks[0]?.category).toBe("beverage");
     expect(food[0]?.probability).toBeGreaterThan(0.5);
+    expect(ft.predict("Xylophon")).toEqual([]);
+    expect(ft.predict("Xylophon Hotel")).toEqual([]);
+    expect(ft.predict("X".repeat(8193))).toEqual([]);
+    expect(ft.predict("ü".repeat(4100))).toEqual([]); // 8200 UTF-8 bytes
+    expect(ft.predict("USB Kabel")[0]?.category).toBe("other");
+
 
     // Fully synthetic withheld and out-of-domain cases. This is a diagnostic
     // benchmark, not a claim about accuracy on real-world supplier invoices.
@@ -33,7 +39,7 @@ describe("pure-Rust WASM and quantized model compatibility", () => {
       ["Garage parking day","parking"],
       ["Ortstaxe Gemeinde","city_tax"],
       ["Kurtaxe je Nacht","city_tax"],
-      ["Business arrangement","bundle"],
+      ["Business arrangement conference","bundle"],
       ["Kombipaket Hotel","bundle"],
       ["Büromaterial Papier","other"],
       ["USB Kabel Adapter","other"],
@@ -47,6 +53,8 @@ describe("pure-Rust WASM and quantized model compatibility", () => {
       "Buchung Referenzcode 12345",
       "Rechnungsempfänger Musterstraße 3",
       "Frühstück und Getränke",
+      "Xylophon",
+      "Xylophon Hotel",
     ];
     function assign(text: string) {
       const predictions = ft.predict(text);

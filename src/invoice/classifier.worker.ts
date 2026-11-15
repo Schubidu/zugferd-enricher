@@ -52,8 +52,14 @@ self.onmessage = async ({ data }: MessageEvent<Request>) => {
   try {
     pending ??= loadModel();
     const classifier = await pending;
-    const predictions: Prediction[][] = data.descriptions.map(description =>
-      classifier.predict(description));
+    // One malformed/overlong item must not discard the predictions for others.
+    const predictions: Prediction[][] = data.descriptions.map(description => {
+      try {
+        return classifier.predict(description);
+      } catch {
+        return [];
+      }
+    });
     self.postMessage({ predictions });
   } catch (error) {
     pending = undefined;

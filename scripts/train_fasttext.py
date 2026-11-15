@@ -7,6 +7,7 @@ The benchmark is a synthetic smoke test, NOT evidence of real-world accuracy.
 from __future__ import annotations
 from pathlib import Path
 import json
+import re
 import tempfile
 import fasttext_new as fasttext
 
@@ -58,6 +59,23 @@ CATEGORIES = {
         "Shipping service", "Consulting hours",
     ],
 }
+# Keep the inference vocabulary derived from the *exact* synthetic training bases.
+# Common context words are excluded: one arbitrary hotel label is not enough.
+GENERIC_TERMS = {
+    "hotel", "service", "business", "one", "night", "room", "rate",
+    "day", "fee", "car", "full", "board", "option", "tag",
+}
+VOCABULARY_FILE = ROOT / "src/invoice/model-vocabulary.ts"
+
+def training_vocabulary() -> list[str]:
+    return sorted({
+        token
+        for bases in CATEGORIES.values()
+        for base in bases
+        for token in re.findall(r"[^\\W\\d_]+", base.lower())
+        if len(token) >= 3 and token not in GENERIC_TERMS
+    })
+
 # Synthetic contexts; no tax-rate words are used as labels/features.
 CONTEXTS = [
     "{}", "{} Tag 1", "{} Tag 2", "{} 12.11.2026", "{} 15.11.2026",
@@ -71,7 +89,7 @@ HELD_OUT = {
     "beverage": ["Cappuccino Bar", "Frühstücksgetränke Hotel"],
     "parking": ["Parkticket Tiefgarage", "Garage parking day"],
     "city_tax": ["Ortstaxe Gemeinde", "Kurtaxe je Nacht"],
-    "bundle": ["Business arrangement", "Kombipaket Hotel"],
+    "bundle": ["Business arrangement conference", "Kombipaket Hotel"],
     "other": ["Büromaterial Papier", "USB Kabel Adapter"],
 }
 
@@ -85,6 +103,22 @@ def main() -> None:
             for base in entries
             for variant in CONTEXTS
         ]
+        # Catch leakage before training, rather than overstating held-out accuracy.
+        training_descriptions = {line.split(" ", 1)[1] for line in lines}
+        overlaps = [
+            item for entries in HELD_OUT.values() for item in entries
+            if item.lower() in training_descriptions
+        ]
+        if overlaps:
+            raise SystemExit("Held-out evaluation overlaps synthetic training examples: " + ", ".join(overlaps))
+        vocab_text = (
+            "// Generated from scripts/train_fasttext.py category bases. Do not edit manually.\\n"
+            "export const MODEL_TERMS = new Set<string>([\\n"
+            + "".join("  " + json.dumps(term, ensure_ascii=False) + ",\\n"
+                      for term in training_vocabulary())
+            + "]);\\n"
+        )
+        VOCABULARY_FILE.write_text(vocab_text, encoding="utf8")
         # Fixed order and single-thread training; no private invoice training data.
         train.write_text("\n".join(lines) + "\n", encoding="utf8")
         model = fasttext.train_supervised(
@@ -115,6 +149,7 @@ def main() -> None:
             "synthetic_held_out": tested,
             "top1_correct": correct,
             "below_abstention_threshold": withheld,
+            "vocabulary_terms": len(training_vocabulary()),
         }, sort_keys=True))
         if MODEL.stat().st_size > 1024 * 1024:
             raise SystemExit("Model exceeds 1 MiB budget")

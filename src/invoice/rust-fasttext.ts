@@ -1,4 +1,5 @@
 import type { Category } from "./classify";
+import { hasKnownModelTerm } from "./model-vocabulary";
 
 export type Prediction = { category: Category; probability: number };
 type WasmExports = {
@@ -52,7 +53,11 @@ export class RustFastText {
 
   predict(description: string): Prediction[] {
     const encoded = new TextEncoder().encode(description.toLocaleLowerCase("de-DE"));
-    if (!encoded.length) return [];
+    // The native ABI rejects >8192 bytes. Abstain per item, never fail the batch.
+    if (!encoded.length || encoded.byteLength > 8192) return [];
+    // Quantized fastText softmax may assign >98% to completely OOV strings.
+    // Only infer when real training-category vocabulary is present.
+    if (!hasKnownModelTerm(description)) return [];
     return this.withBytes(encoded, pointer => {
       const out = this.wasm.ft_alloc(16);
       if (!out) throw new Error("INFERENCE_FAILED");
