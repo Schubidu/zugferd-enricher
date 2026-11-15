@@ -99,7 +99,7 @@ export function reconcileInvoice(draft: InvoiceDraft): Finding[] {
       if (groupNet !== total) {
         findings.push({
           id: "net-summary", severity: "review",
-          message: "Die Nettobeträge der erkannten Steuergruppen ergeben nicht den ausgewiesenen Gesamtnettobetrag; weitere Gruppen könnten fehlen.",
+          message: "Erkannte Steuergruppen: " + formatEuroCents(groupNet) + " netto; ausgewiesenes Gesamtnetto: " + formatEuroCents(total) + ". Differenz: " + formatEuroCents(total - groupNet) + ". Bitte prüfen, ob weitere oder steuerfreie Positionen nicht in den Gruppen enthalten sind.",
           evidenceIds: [
             ...draft.taxGroups.flatMap(group => group.evidenceIds),
             ...(draft.fields.netTotal?.evidenceIds ?? []),
@@ -172,7 +172,7 @@ export function reconcileInvoice(draft: InvoiceDraft): Finding[] {
 
   if (draft.items.some(item => !item.taxRate)) {
     findings.push({id:"missing-tax-rates",severity:"review",
-      message:"Mindestens eine Position hat keinen belegten Steuersatz. Kategorien ersetzen keine Steuerangaben.",
+      message: draft.items.filter(item => !item.taxRate).length + " Position(en) ohne belegten Steuersatz. Über die Positionslinks direkt prüfen; Kategorien ersetzen keine Steuerangaben.",
       evidenceIds:draft.items.filter(item=>!item.taxRate).flatMap(item=>item.evidenceIds)});
   }
 

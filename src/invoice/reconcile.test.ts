@@ -124,6 +124,10 @@ describe("source-backed invoice reconciliation",()=>{
     expect(reconcileInvoice(draft)).toEqual(expect.arrayContaining([
       expect.objectContaining({id:"net-summary",severity:"review",evidenceIds:["group7","net"]}),
     ]));
+    const hint = reconcileInvoice(draft).find(f => f.id === "net-summary")!.message;
+    expect(hint).toContain("200,00 €");
+    expect(hint).toContain("100,00 €");
+    expect(hint).toContain("-100,00 €");
   });
   it("detects earlier due dates written with English month names",()=>{
     const draft=makeDraft();
