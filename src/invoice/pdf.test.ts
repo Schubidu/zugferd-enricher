@@ -1,4 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// Vitest runs in Node, but Vite's ?url is a browser asset path.
+// Resolve the same installed worker as a file URL for PDF.js's Node fake worker.
+vi.mock("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url", () => ({
+  default: new URL("../../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).href,
+}));
 import { loadInvoicePdf } from "./pdf";
 
 /** Synthetic, fully in-memory PDFs; never add real customer invoices to this repository. */
