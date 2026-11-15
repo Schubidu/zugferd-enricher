@@ -117,3 +117,17 @@ h1 span { color: #47749c; }
   .field-grid, .line-item-values { grid-template-columns: 1fr; }
   .data-card { padding: 14px; }
 }
+
+.position-sum {
+  display: grid;
+  gap: 7px;
+  padding: 16px;
+  margin-top: 16px;
+  border-top: 2px solid #9cb3cb;
+  border-radius: 8px;
+  background: #f1f5fa;
+}
+.position-sum-label { font-size: .91rem; font-weight: 700; color: #274562; }
+.position-sum-value { font-size: 1.5rem; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.position-sum .quiet { margin: 0; }
+.position-sum-error { margin: 0; color: #8a2930; font-size: .85rem; }

@@ -32,3 +32,35 @@ export function checkTotals(
   const delta = parsed[0]! + parsed[1]! - parsed[2]!;
   return { status: delta === 0n ? "match" : "mismatch", deltaCents: delta.toString() };
 }
+
+/**
+ * Adds only explicitly extracted line amounts, with no assumption about whether
+ * the amounts are net, gross or exempt from VAT. Incomplete input has no total.
+ */
+export function sumLineItemAmounts(items: readonly { amount: string }[]): {
+  totalCents: bigint | null;
+  itemCount: number;
+  invalidCount: number;
+} {
+  let total = 0n;
+  let invalidCount = 0;
+  for (const item of items) {
+    const amount = parseCents(item.amount);
+    if (amount === null) invalidCount++;
+    else total += amount;
+  }
+  return {
+    totalCents: items.length > 0 && invalidCount === 0 ? total : null,
+    itemCount: items.length,
+    invalidCount,
+  };
+}
+
+/** Deterministic German euro formatting without converting bigint to number. */
+export function formatEuroCents(cents: bigint): string {
+  const negative = cents < 0n;
+  const absolute = negative ? -cents : cents;
+  const euros = (absolute / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const fractional = (absolute % 100n).toString().padStart(2, "0");
+  return (negative ? "-" : "") + euros + "," + fractional + " €";
+}

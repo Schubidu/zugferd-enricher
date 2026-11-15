@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { FieldKey, InvoiceDraft, SourceLine } from "./model";
 import { FIELD_KEYS, FIELD_LABELS } from "./model";
-import { checkTotals } from "./money";
+import { checkTotals, formatEuroCents, sumLineItemAmounts } from "./money";
 import PdfPreview from "./PdfPreview";
 
 type Props = {
@@ -18,6 +18,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
     draft.fields.taxTotal?.value ?? null,
     draft.fields.grossTotal?.value ?? null,
   );
+  const positionSum = sumLineItemAmounts(draft.items);
   function focusEvidence(id: string) {
     const line = draft.sourceLines.find(x => x.id === id);
     if (line) {
@@ -121,6 +122,24 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                 ))}
               </div>
             )}
+            <div className="position-sum" role="status" aria-live="polite">
+              <span className="position-sum-label">Summe der erkannten Positionen</span>
+              <strong className="position-sum-value">
+                {positionSum.totalCents === null
+                  ? "Nicht berechenbar"
+                  : formatEuroCents(positionSum.totalCents)}
+              </strong>
+              {positionSum.invalidCount > 0 && (
+                <p className="position-sum-error">
+                  {positionSum.invalidCount} Betragsangabe(n) sind ungültig oder unvollständig.
+                </p>
+              )}
+              <p className="quiet">
+                Summe aus {positionSum.itemCount} erkannten Positionen einschließlich manueller Änderungen.
+                Die Betragsbasis (netto/brutto) und Vollständigkeit sind nicht geprüft.
+                Deshalb ist dies kein automatischer Abgleich mit dem Rechnungsbetrag.
+              </p>
+            </div>
           </section>
           <section className="data-card" aria-labelledby="tax-groups-heading">
             <h3 id="tax-groups-heading">Ausgewiesene Steuergruppen</h3>
