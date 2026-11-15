@@ -14,6 +14,12 @@ const groupPattern = new RegExp(
 );
 const taxSummary = /^\s*(?:(?:USt|MwSt|VAT|Tax)(?:\s+\d{1,2}\s*%)?|Umsatzsteuer(?:\s+\d{1,2}\s*%)?)\s*(?:[:=]|\s|$)/i;
 
+// Explicit third-party statement, not a derived VAT rate or an additional position.
+const noVatPassThroughPattern = new RegExp(
+  "^\\s*Kurtaxe\\s*\\(\\s*im\\s+Namen\\s+der\\s+Gemeinde\\s*,\\s*ohne\\s+Umsatzsteuer\\s*\\)\\s*:\\s*(" +
+    money + ")\\s*$", "i",
+);
+
 function validDate(value: string): boolean {
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   const german = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(value);
@@ -77,6 +83,7 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
   const fields = emptyFields();
   const items: LineItem[] = [];
   const taxGroups: TaxGroup[] = [];
+  const noVatNotes: {amountCents: bigint; evidenceId: string}[] = [];
   const warnings: string[] = [];
   const candidates = new Map<FieldKey, FieldValue[]>();
   const consumed = new Set<string>();
@@ -85,6 +92,12 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     if (consumed.has(line.id)) continue;
+    const note = noVatPassThroughPattern.exec(line.text);
+    if (note) {
+      const amountCents = parseCents(note[1]!);
+      if (amountCents !== null) noVatNotes.push({amountCents, evidenceId: line.id});
+      continue; // Do not count the summary statement as a second Kurtaxe line item.
+    }
     const group = groupPattern.exec(line.text);
     if (group && parseCents(group[2]!) !== null && parseCents(group[3]!) !== null) {
       taxGroups.push({ rate: group[1]! + "%", net: group[2]!, tax: group[3]!, evidenceIds: [line.id] });
@@ -132,6 +145,20 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
     });
   }
 
+  // A lone, amount-matched PDF declaration can complete the treatment of one
+  // printed item. Category labels or arithmetically remaining net amounts cannot.
+  if (noVatNotes.length === 1) {
+    const note = noVatNotes[0]!;
+    const matching = items.filter(item =>
+      /^Kurtaxe\b/i.test(item.description) && item.taxRate === null &&
+      parseCents(item.amount) === note.amountCents);
+    if (matching.length === 1) {
+      matching[0]!.taxTreatment = {
+        kind: "third_party_no_vat", origin: "pdf", evidenceIds: [note.evidenceId],
+      };
+    }
+  }
+
   for (const label of labels) {
     const found = candidates.get(label.key);
     if (!found?.length) continue;
@@ -149,6 +176,8 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
   if (lines.length === 0) warnings.push("Kein eingebetteter Text erkannt. Gescannte PDFs benötigen die spätere lokale OCR.");
   if (!fields.grossTotal) warnings.push("Kein eindeutig ausgewiesener Gesamtbetrag gefunden.");
   if (!fields.invoiceNumber) warnings.push("Keine eindeutig bezeichnete Rechnungsnummer gefunden.");
-  if (items.some(item => !item.taxRate)) warnings.push("Mindestens eine Position hat keinen eindeutig ausgewiesenen Steuersatz.");
+  if (items.some(item => !item.taxRate && !item.taxTreatment)) {
+    warnings.push("Mindestens eine Position hat keinen belegten Steuersatz oder Steuerstatus.");
+  }
   return { pageCount, sourceLines: lines, fields, items, taxGroups, warnings };
 }
