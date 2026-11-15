@@ -25,7 +25,19 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
   const inspectorRef = useRef<HTMLDialogElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const [inspectedEvidence, setInspectedEvidence] = useState<string | null>(null);
-  useEffect(() => () => classificationController.current?.abort(), []);
+  // Every PDF object is a new classification scope, even if item IDs repeat.
+  // This also runs when a parent replaces the PDF without unmounting this view.
+  useEffect(() => {
+    classificationController.current?.abort();
+    classificationController.current = null;
+    setClassifications({});
+    setClassifying(false);
+    setClassificationError(null);
+    setPage(1);
+    setActiveEvidenceId(null);
+    setInspectedEvidence(null);
+    return () => classificationController.current?.abort();
+  }, [pdf]);
   useEffect(() => {
     if (!inspectedEvidence) return;
     const dialog = inspectorRef.current;

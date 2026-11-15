@@ -173,6 +173,7 @@ function App() {
 
       {loaded && (
         <InvoiceReview
+          key={generation.current}
           pdf={loaded.pdf}
           draft={loaded.draft}
           onDraftChange={draft => setLoaded(current => current ? {...current, draft} : current)}

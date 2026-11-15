@@ -129,6 +129,21 @@ describe("source-backed invoice reconciliation",()=>{
     expect(hint).toContain("100,00 €");
     expect(hint).toContain("-100,00 €");
   });
+  it("never attributes a manually changed due date to the original PDF",()=>{
+    const draft=makeDraft();
+    draft.fields.invoiceDate={value:"2026-11-15",origin:"pdf",evidenceIds:["printed-invoice-date"]};
+    draft.fields.dueDate={value:"2026-11-10",origin:"manual",evidenceIds:["old-printed-due-date"]};
+    const findings=reconcileInvoice(draft);
+    expect(findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({id:"manual-date-values",severity:"review",evidenceIds:[]}),
+    ]));
+    expect(findings.some(f=>f.id==="date-order")).toBe(false);
+    draft.fields.dueDate.origin="pdf";
+    expect(reconcileInvoice(draft)).toEqual(expect.arrayContaining([
+      expect.objectContaining({id:"date-order",evidenceIds:["printed-invoice-date","old-printed-due-date"]}),
+    ]));
+  });
+
   it("detects earlier due dates written with English month names",()=>{
     const draft=makeDraft();
     draft.fields.invoiceDate={value:"November 15, 2026",origin:"pdf",evidenceIds:["date1"]};

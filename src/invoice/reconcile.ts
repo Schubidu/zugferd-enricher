@@ -156,10 +156,19 @@ export function reconcileInvoice(draft: InvoiceDraft): Finding[] {
     return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month-1 &&
       parsed.getUTCDate() === day ? timestamp : null;
   }
-  const invoiceDate = draft.fields.invoiceDate && dateValue(draft.fields.invoiceDate.value);
-  const dueDate = draft.fields.dueDate && dateValue(draft.fields.dueDate.value);
-  if (invoiceDate !== null && dueDate !== null && invoiceDate !== undefined &&
-    dueDate !== undefined && dueDate < invoiceDate) {
+  if (draft.fields.invoiceDate?.origin === "manual" ||
+    draft.fields.dueDate?.origin === "manual") {
+    findings.push({
+      id: "manual-date-values", severity: "review",
+      message: "Manuell korrigierte Datumsangaben sind nicht durch das Original belegt. Bitte direkt vergleichen.",
+      evidenceIds: [],
+    });
+  }
+  const invoiceDate = draft.fields.invoiceDate?.origin === "pdf"
+    ? dateValue(draft.fields.invoiceDate.value) : null;
+  const dueDate = draft.fields.dueDate?.origin === "pdf"
+    ? dateValue(draft.fields.dueDate.value) : null;
+  if (invoiceDate !== null && dueDate !== null && dueDate < invoiceDate) {
     findings.push({
       id:"date-order",severity:"review",
       message:"Das Fälligkeitsdatum liegt vor dem Rechnungsdatum. Bitte Original prüfen.",
