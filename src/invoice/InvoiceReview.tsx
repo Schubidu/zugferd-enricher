@@ -43,7 +43,8 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
     });
   }
   function sourceButton(lines: SourceLine[], ids: string[]) {
-    const source = lines.find(line => ids.includes(line.id));
+    // For two-line fields the value is on the last evidence line, not the label.
+    const source = lines.find(line => line.id === ids.at(-1));
     return source ? (
       <button className="evidence-link" type="button" onClick={() => focusEvidence(source.id)}>
         Fundstelle S. {source.page}
