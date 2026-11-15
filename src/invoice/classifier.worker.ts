@@ -1,62 +1,64 @@
 /// <reference lib="webworker" />
-import { FastText } from "fasttext.wasm";
-import coreUrl from "fasttext.wasm/dist/core/fasttext.mjs?url";
-import wasmUrl from "fasttext.wasm/dist/core/fasttext.wasm?url";
+import { RustFastText } from "./rust-fasttext";
 import type { ModelErrorCode } from "./model-errors";
 
 type Prediction = { category: string; probability: number };
 type Request = { descriptions: string[] };
-let pending: Promise<FastText> | undefined;
+let pending: Promise<RustFastText> | undefined;
 
 class ModelLoadError extends Error {
   constructor(readonly code: ModelErrorCode) { super(code); }
 }
 
-/**
- * Only project-shipped, same-origin, public model/runtime assets are fetched.
- * Never include private invoice data in errors or diagnostic messages.
- */
-async function loadModel(): Promise<FastText> {
+/** Fetch only project-shipped assets from our own origin. */
+async function loadModel(): Promise<RustFastText> {
   if (typeof WebAssembly === "undefined") throw new ModelLoadError("WASM_UNAVAILABLE");
 
-  let bytes: Uint8Array;
+  let modelBytes: Uint8Array;
+  let wasmBytes: ArrayBuffer;
   try {
-    const response = await fetch(new URL("/models/invoice-categories-v1.ftz", self.location.origin));
-    if (!response.ok) throw new Error("non-success model response");
-    bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength === 0 || bytes.byteLength > 1024 * 1024) throw new Error("invalid model size");
+    const [model, wasm] = await Promise.all([
+      fetch(new URL("/models/invoice-categories-v1.ftz", self.location.origin)),
+      fetch(new URL("/models/fasttext-rust-v1.wasm", self.location.origin)),
+    ]);
+    if (!model.ok || !wasm.ok) throw new Error("Missing local classifier asset");
+    modelBytes = new Uint8Array(await model.arrayBuffer());
+    wasmBytes = await wasm.arrayBuffer();
+    if (!modelBytes.length || modelBytes.byteLength > 1024 * 1024 ||
+      wasmBytes.byteLength === 0 || wasmBytes.byteLength > 1024 * 1024) {
+      throw new Error("Invalid static classifier asset");
+    }
   } catch {
     throw new ModelLoadError("MODEL_FETCH_FAILED");
   }
 
-  let fastText: FastText;
+  let classifier: RustFastText;
   try {
-    fastText = await FastText.create({ corePath: coreUrl, wasmPath: wasmUrl });
+    const source = await WebAssembly.instantiate(wasmBytes, {});
+    classifier = new RustFastText(source.instance);
   } catch {
     throw new ModelLoadError("WASM_INIT_FAILED");
   }
+
   try {
-    fastText.loadModel(bytes);
+    classifier.loadModel(modelBytes);
   } catch {
     throw new ModelLoadError("MODEL_DECODE_FAILED");
   }
-  return fastText;
+  return classifier;
 }
 
 self.onmessage = async ({ data }: MessageEvent<Request>) => {
   try {
     pending ??= loadModel();
-    const model = await pending;
+    const classifier = await pending;
     const predictions: Prediction[][] = data.descriptions.map(description =>
-      Array.from(model.predict(description.toLocaleLowerCase("de-DE"), 2, 0))
-        .map(([label, probability]) => ({
-          category: label.replace(/^__label__/, ""), probability,
-        })),
-    );
+      classifier.predict(description));
     self.postMessage({ predictions });
   } catch (error) {
-    pending = undefined; // Allows a subsequent attempt after a temporary failure.
-    const code = error instanceof ModelLoadError ? error.code : "INFERENCE_FAILED";
+    pending = undefined;
+    const code: ModelErrorCode = error instanceof ModelLoadError ? error.code : "INFERENCE_FAILED";
+    // Fixed code only; never include invoice descriptions, paths, or error stacks.
     self.postMessage({ error: code });
   }
 };
