@@ -118,7 +118,7 @@ const statement = new RegExp(
 );
 const authority = /\b(?:im\s+Namen|im\s+Auftrag)\s+(?:der|des)\s+(?:Gemeinde|Stadt|Kommune|Kurorts)\b/i;
 const noVat = /\b(?:ohne\s+(?:Umsatzsteuer|Mehrwertsteuer|USt|MwSt)|keine\s+(?:Umsatzsteuer|Mehrwertsteuer|USt|MwSt)|nicht\s+umsatzsteuerpflichtig)\b/i;
-const contradiction = /\b(?:nicht\s+ohne|aber\s+mit|doch\s+mit|inkl\.?\s+(?:Umsatzsteuer|MwSt|USt)|mit\s+\d{1,2}\s*%\s*(?:Umsatzsteuer|MwSt|USt))\b/i;
+const contradiction = /\b(?:nicht\s+ohne|(?:aber\s+)?nicht\s+im\s+(?:Namen|Auftrag)|aber\s+mit|doch\s+mit|inkl\.?\s+(?:Umsatzsteuer|MwSt|USt)|mit\s+\d{1,2}\s*%\s*(?:Umsatzsteuer|MwSt|USt))\b/i;
 const anotherAmount = new RegExp(amount);
 
 export type SourceTaxEvidence = {
