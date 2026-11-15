@@ -31,6 +31,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
   );
   const positionSum = sumLineItemAmounts(draft.items);
   const categorySummary = summarizeCategories(draft.items, classifications);
+  const unclassifiedCount = categorySummary.find(group => group.category === "unknown")?.count ?? 0;
   const findings = reconcileInvoice(draft);
 
   async function runClassification() {
@@ -161,13 +162,30 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
               </p>
               {classificationError && <p role="alert" className="error">{classificationError}</p>}
             </div>
+            {unclassifiedCount > 0 && (
+              <p className="unclassified-summary">
+                {unclassifiedCount} {unclassifiedCount === 1 ? "Position benötigt" : "Positionen benötigen"} eine Kategorie.
+                Die betreffenden Positionen sind hervorgehoben.
+              </p>
+            )}
             {draft.items.length === 0 ? <p className="quiet">Keine eindeutig strukturierten Positionen erkannt. Bitte Original prüfen.</p> : (
               <div className="line-items">
                 {draft.items.map((item, index) => {
                   const assigned = classifications[item.id] ?? classifyDescription(item.description);
                   return (
-                  <div className="line-item" key={item.id}>
-                    <div className="line-item-title"><strong>Position {index + 1}</strong>{sourceButton(draft.sourceLines,item.evidenceIds)}</div>
+                  <div
+                    className={assigned.category === "unknown" ? "line-item line-item--unclassified" : "line-item"}
+                    key={item.id}
+                  >
+                    <div className="line-item-title">
+                      <div className="line-item-heading">
+                        <strong>Position {index + 1}</strong>
+                        {assigned.category === "unknown" && (
+                          <span className="category-review-label">Kategorie prüfen</span>
+                        )}
+                      </div>
+                      {sourceButton(draft.sourceLines,item.evidenceIds)}
+                    </div>
                     <label>Beschreibung
                       <input type="text" aria-label={"Position " + (index+1) + " Beschreibung"}
                         value={item.description} onChange={event => updateItem(item.id,"description",event.currentTarget.value)}/>

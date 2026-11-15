@@ -127,6 +127,41 @@ describe("position sum in the browser invoice review", () => {
     expect(table).toHaveTextContent("10,50 €");
   });
 
+  it("highlights unknown categories and removes the highlight after assigning a category", () => {
+    render(<Harness />);
+    const first = screen.getByText("Position 1").closest(".line-item");
+    const known = screen.getByText("Position 7").closest(".line-item");
+    expect(first).toHaveClass("line-item--unclassified");
+    expect(first).toHaveTextContent("Kategorie prüfen");
+    expect(known).not.toHaveClass("line-item--unclassified");
+    expect(screen.getByText(/6 Positionen benötigen eine Kategorie/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", {name:"Position 1 Kategorie"}), {
+      target: {value:"accommodation"},
+    });
+    expect(first).not.toHaveClass("line-item--unclassified");
+    expect(first).not.toHaveTextContent("Kategorie prüfen");
+    expect(screen.getByText(/5 Positionen benötigen eine Kategorie/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("combobox", {name:"Position 1 Kategorie"}), {
+      target: {value:"unknown"},
+    });
+    expect(first).toHaveClass("line-item--unclassified");
+    expect(screen.getByText(/6 Positionen benötigen eine Kategorie/)).toBeInTheDocument();
+  });
+
+  it("updates the unknown highlight when a description gains a known rule match", () => {
+    render(<Harness />);
+    const first = screen.getByText("Position 1").closest(".line-item");
+    expect(first).toHaveClass("line-item--unclassified");
+    fireEvent.change(screen.getByRole("textbox", {name:"Position 1 Beschreibung"}), {
+      target: {value:"Konferenzlunch"},
+    });
+    expect(first).not.toHaveClass("line-item--unclassified");
+    expect(screen.getByRole("combobox", {name:"Position 1 Kategorie"})).toHaveValue("food");
+    expect(screen.getByText(/5 Positionen benötigen eine Kategorie/)).toBeInTheDocument();
+  });
+
   it("manual category changes do not modify extracted tax rates or amounts", () => {
     render(<Harness />);
     expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("unknown");
