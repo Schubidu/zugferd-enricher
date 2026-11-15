@@ -55,7 +55,11 @@ export default function PdfPreview({pdf, pageNumber, onPageChange, evidence, act
     if (!active || !scroll || !paper) return;
     // Text boxes are normalized to the PDF page. Scroll inside the preview
     // to the *line*, not merely to its page number.
-    const offset = paper.offsetTop + active.box.y * paper.clientHeight;
+    // offsetTop is relative to the *offset parent*, not necessarily this
+    // scrollport. Bounding rectangles also work inside the mobile dialog.
+    const relativePaperTop = paper.getBoundingClientRect().top -
+      scroll.getBoundingClientRect().top + scroll.scrollTop;
+    const offset = relativePaperTop + active.box.y * paper.clientHeight;
     scroll.scrollTop = Math.max(0, offset - scroll.clientHeight * 0.32);
   }, [activeEvidenceId, pageNumber, evidence, dimensions]);
 
