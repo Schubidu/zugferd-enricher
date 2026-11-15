@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { FieldKey, InvoiceDraft, SourceLine } from "./model";
-import { FIELD_KEYS, FIELD_LABELS } from "./model";
+import { FIELD_KEYS, FIELD_LABELS, isSourceBackedNoVat } from "./model";
 import { formatEuroCents, sumLineItemAmounts } from "./money";
 import PdfPreview from "./PdfPreview";
 import { CATEGORY_IDS, CATEGORY_LABELS, CATEGORY_REVIEW_STATUS_LABELS, classifyDescription, getCategoryReviewStatus } from "./classify";
@@ -122,7 +122,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
     }
     onDraftChange({
       ...draft,
-      items: draft.items.map(item => item.id === id ? {...item, [key]: value, origin: "manual"} : item),
+      items: draft.items.map(item => item.id === id ? {...item, [key]: value, taxTreatment: undefined, origin: "manual"} : item),
     });
   }
   function sourceButton(lines: SourceLine[], ids: string[]) {
@@ -152,7 +152,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                 <p>{finding.message}</p>
                 <div className="finding-actions">
                   {finding.id === "missing-tax-rates" ? (
-                    draft.items.filter(item => !item.taxRate).map(item => {
+                    draft.items.filter(item => !item.taxRate && !isSourceBackedNoVat(item)).map(item => {
                       const index = draft.items.findIndex(entry => entry.id === item.id);
                       return (
                         <button
@@ -277,11 +277,24 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                         <input type="text" aria-label={"Position " + (index+1) + " Betrag"}
                           value={item.amount} onChange={event => updateItem(item.id,"amount",event.currentTarget.value)}/>
                       </label>
-                      <label>Steuersatz laut Position
-                        <input type="text" aria-label={"Position " + (index+1) + " Steuersatz"}
-                          placeholder="Nicht angegeben" value={item.taxRate ?? ""}
-                          onChange={event => updateItem(item.id,"taxRate",event.currentTarget.value)}/>
-                      </label>
+                      {isSourceBackedNoVat(item) ? (
+                        <div className="source-tax-treatment">
+                          <strong>Steuerbehandlung laut Original</strong>
+                          <span>Ohne Umsatzsteuer (im Namen der Gemeinde)</span>
+                          <span>USt-Betrag: 0,00 € · aus dem Belegtext abgeleitet</span>
+                          {sourceButton(draft.sourceLines, item.taxTreatment!.evidenceIds)}
+                          <button type="button" className="review-action"
+                            onClick={() => updateItem(item.id, "taxRate", "")}>
+                            Steuerangabe korrigieren
+                          </button>
+                        </div>
+                      ) : (
+                        <label>Steuersatz laut Position
+                          <input type="text" aria-label={"Position " + (index+1) + " Steuersatz"}
+                            placeholder="Nicht angegeben" value={item.taxRate ?? ""}
+                            onChange={event => updateItem(item.id,"taxRate",event.currentTarget.value)}/>
+                        </label>
+                      )}
                     </div>
                     <label className="category-field">Interne Kategorie
                       <select aria-label={"Position " + (index+1) + " Kategorie"}
@@ -290,8 +303,8 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                         {CATEGORY_IDS.map(id => <option key={id} value={id}>{CATEGORY_LABELS[id]}</option>)}
                       </select>
                     </label>
-                    {!item.taxRate && (
-                      <p className="position-review-note">Kein Steuersatz aus dem Original erkannt – hier prüfen.</p>
+                    {!item.taxRate && !isSourceBackedNoVat(item) && (
+                      <p className="position-review-note">Kein belegter Steuersatz oder Steuerstatus – hier prüfen.</p>
                     )}
                     <p className="category-origin">
                       <strong>Kategoriestatus: {CATEGORY_REVIEW_STATUS_LABELS[getCategoryReviewStatus(assigned)]}</strong>
