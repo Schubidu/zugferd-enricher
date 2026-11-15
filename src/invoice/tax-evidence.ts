@@ -146,6 +146,6 @@ export function findSourceTaxEvidence(lines: readonly SourceLine[]): SourceTaxEv
 
 /** A tax explanation is not an additional line item, even if validation abstains. */
 export function isTaxExplanationLine(text: string): boolean {
-  return /^(?:Kurtaxe|Ortstaxe|Beherbergungssteuer|Tourismusabgabe)\b.*\b(?:Umsatzsteuer|Mehrwertsteuer|USt|MwSt)\b/i.test(text.trim()) &&
+  return /^(?:Kurtaxe|Ortstaxe|Beherbergungssteuer|Tourismusabgabe)\b.*\b(?:Umsatzsteuer(?:pflichtig)?|Mehrwertsteuer|USt|MwSt)\b/i.test(text.trim()) &&
     !/\b\d+(?:[.,]\d+)?\s*[x×]\s*[-+]?\d+[.,]\d{2}\b/.test(text);
 }
