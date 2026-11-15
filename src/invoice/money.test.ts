@@ -4,6 +4,9 @@ import { checkTotals, formatEuroCents, parseCents, sumLineItemAmounts } from "./
 describe("exact invoice money", () => {
   it.each([
     ["1.234,56", 123456n],
+    ["1 234,56", 123456n],
+    ["1\u00a0234,56", 123456n],
+    ["1 234.56", 123456n],
     ["1,234.56", 123456n],
     ["EUR 1.234,56", 123456n],
     ["€ 12,50", 1250n],
@@ -14,7 +17,7 @@ describe("exact invoice money", () => {
     expect(parseCents(input)).toBe(expected);
   });
 
-  it.each(["1.234", "1,234", "12", "1.23.45", "12,3", "12.345", "1,23,45", "12abc", ""])(
+  it.each(["1.234", "1,234", "12", "1.23.45", "12,3", "12.345", "1,23,45", "1 23,45", "12abc", ""])(
     "rejects ambiguous or invalid numeric notation %s", value => {
       expect(parseCents(value)).toBeNull();
     },

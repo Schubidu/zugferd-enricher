@@ -6,7 +6,10 @@ import InvoiceReview from "./InvoiceReview";
 import { emptyFields } from "./model";
 import type { InvoiceDraft } from "./model";
 
-vi.mock("./PdfPreview", () => ({ default: () => <div data-testid="original-pdf-preview" /> }));
+vi.mock("./PdfPreview", () => ({
+  default: ({ pageNumber, activeEvidenceId }: {pageNumber: number; activeEvidenceId: string | null}) =>
+    <div data-testid="original-pdf-preview">{pageNumber + ":" + activeEvidenceId}</div>,
+}));
 
 const itemAmounts = ["105,00", "125,00", "118,00", "42,00", "15,00", "16,00", "10,50"];
 const initialDraft: InvoiceDraft = {
@@ -48,4 +51,21 @@ describe("position sum in the browser invoice review", () => {
     expect(screen.getByText(/1 Betragsangabe\(n\) sind ungültig/i)).toBeInTheDocument();
     expect(screen.queryByText("431,50 €")).not.toBeInTheDocument();
   });
+  it("highlights the value line rather than the label when evidence spans two lines", () => {
+    const draft: InvoiceDraft = {
+      ...initialDraft,
+      fields: {
+        ...emptyFields(),
+        grossTotal: { value: "119,00", origin: "pdf", evidenceIds: ["label", "amount"] },
+      },
+      sourceLines: [
+        {id: "label", page: 1, text: "Gesamtbetrag", box: {x:0.1,y:0.1,width:0.3,height:0.02}},
+        {id: "amount", page: 2, text: "119,00", box: {x:0.1,y:0.1,width:0.3,height:0.02}},
+      ],
+    };
+    render(<InvoiceReview pdf={{numPages:2} as PDFDocumentProxy} draft={draft} onDraftChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", {name: "Fundstelle S. 2"}));
+    expect(screen.getByTestId("original-pdf-preview")).toHaveTextContent("2:amount");
+  });
+
 });

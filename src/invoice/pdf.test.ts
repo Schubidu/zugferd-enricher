@@ -86,4 +86,24 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
   it("rejects malformed bytes without returning a misleading invoice", async () => {
     await expect(loadInvoicePdf(fakeLocalPdf(new Uint8Array([0,1,2,3])))).rejects.toThrow();
   });
+  it("rejects a cancelled extraction before opening the PDF worker", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(loadInvoicePdf(fakeLocalPdf(makePdf([["Invoice 119.00"]])), controller.signal))
+      .rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("does not start PDF.js when aborted while local file bytes are being read", async () => {
+    let finishReading: ((value: ArrayBuffer) => void) | undefined;
+    const file = {
+      arrayBuffer: () => new Promise<ArrayBuffer>(resolve => { finishReading = resolve; }),
+    } as File;
+    const controller = new AbortController();
+    const pending = loadInvoicePdf(file, controller.signal);
+    // File bytes may complete even after an abort; the worker must not be started.
+    controller.abort();
+    finishReading?.(Uint8Array.from(makePdf([["Gross total: 120.00"]])).buffer);
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+
 });
