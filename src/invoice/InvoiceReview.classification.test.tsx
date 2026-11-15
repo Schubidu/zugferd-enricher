@@ -68,7 +68,7 @@ describe("asynchronous category suggestions", () => {
     }} onDraftChange={vi.fn()} />);
     expect(activeSignal?.aborted).toBe(true);
     expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("beverage");
-    expect(screen.getByText("15,00 €")).toBeInTheDocument();
+    expect(screen.getByRole("table")).toHaveTextContent("15,00 €");
   });
 
   it("aborts stale inference when the description changes and keeps the new category", async () => {
