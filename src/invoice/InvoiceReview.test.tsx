@@ -31,7 +31,7 @@ describe("position sum in the browser invoice review", () => {
     render(<Harness />);
     expect(screen.getByText("Summe der erkannten Positionen")).toBeInTheDocument();
     expect(screen.getByText("431,50 €")).toBeInTheDocument();
-    expect(screen.getByText(/Dies ist kein automatischer Abgleich mit dem Rechnungsbetrag/i)).toBeInTheDocument();
+    expect(screen.getByText(/kein automatischer Abgleich mit dem Rechnungsbetrag/i)).toBeInTheDocument();
   });
 
   it("recomputes the displayed sum immediately after a manual amount correction", () => {
