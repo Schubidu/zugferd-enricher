@@ -1,6 +1,7 @@
 import { emptyFields, FIELD_LABELS } from "./model";
 import type { FieldKey, FieldValue, InvoiceDraft, LineItem, SourceLine, TaxGroup } from "./model";
 import { parseCents } from "./money";
+import { findSourceTaxEvidence, isTaxExplanationLine } from "./tax-evidence";
 
 // Capture entire spaced/thousands-grouped amounts, not a plausible numeric suffix.
 const money = /[-+]?(?:\d{1,3}(?:[., ]\d{3})+|\d+)[.,]\d{2}/.source;
@@ -13,12 +14,6 @@ const groupPattern = new RegExp(
   money + ")\\s+(?:Steuer|MwSt|VAT|Tax)\\s*[:=]?\\s*(" + money + ")\\s*$", "i",
 );
 const taxSummary = /^\s*(?:(?:USt|MwSt|VAT|Tax)(?:\s+\d{1,2}\s*%)?|Umsatzsteuer(?:\s+\d{1,2}\s*%)?)\s*(?:[:=]|\s|$)/i;
-
-// Explicit third-party statement, not a derived VAT rate or an additional position.
-const noVatPassThroughPattern = new RegExp(
-  "^\\s*Kurtaxe\\s*\\(\\s*im\\s+Namen\\s+der\\s+Gemeinde\\s*,\\s*ohne\\s+Umsatzsteuer\\s*\\)\\s*:\\s*(" +
-    money + ")\\s*$", "i",
-);
 
 function validDate(value: string): boolean {
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -83,21 +78,18 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
   const fields = emptyFields();
   const items: LineItem[] = [];
   const taxGroups: TaxGroup[] = [];
-  const noVatNotes: {amountCents: bigint; evidenceId: string}[] = [];
   const warnings: string[] = [];
   const candidates = new Map<FieldKey, FieldValue[]>();
   const consumed = new Set<string>();
   const lines = [...sourceLines].sort((a, b) => a.page - b.page || a.box.y - b.box.y || a.box.x - b.box.x);
+  // Text candidates are identified by a separate on-device model. Only
+  // source wording and exact amount matching can validate a tax treatment.
+  const noVatNotes = findSourceTaxEvidence(lines);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     if (consumed.has(line.id)) continue;
-    const note = noVatPassThroughPattern.exec(line.text);
-    if (note) {
-      const amountCents = parseCents(note[1]!);
-      if (amountCents !== null) noVatNotes.push({amountCents, evidenceId: line.id});
-      continue; // Do not count the summary statement as a second Kurtaxe line item.
-    }
+    if (isTaxExplanationLine(line.text)) continue; // Never duplicate an explanation as a position.
     const group = groupPattern.exec(line.text);
     if (group && parseCents(group[2]!) !== null && parseCents(group[3]!) !== null) {
       taxGroups.push({ rate: group[1]! + "%", net: group[2]!, tax: group[3]!, evidenceIds: [line.id] });
@@ -145,18 +137,20 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
     });
   }
 
-  // A lone, amount-matched PDF declaration can complete the treatment of one
-  // printed item. Category labels or arithmetically remaining net amounts cannot.
-  if (noVatNotes.length === 1) {
-    const note = noVatNotes[0]!;
-    const matching = items.filter(item =>
-      /^Kurtaxe\b/i.test(item.description) && item.taxRate === null &&
+  // An item is linked only when its label and amount uniquely agree with one
+  // separately printed, independently verified note. No tax rate is invented.
+  for (const item of items) {
+    if (item.taxRate !== null) continue;
+    const sameItem = (candidate: LineItem) =>
+      candidate.description.toLocaleLowerCase("de-DE") === item.description.toLocaleLowerCase("de-DE") &&
+      parseCents(candidate.amount) === parseCents(item.amount);
+    const notes = noVatNotes.filter(note =>
+      item.description.toLocaleLowerCase("de-DE") === note.label &&
       parseCents(item.amount) === note.amountCents);
-    if (matching.length === 1) {
-      matching[0]!.taxTreatment = {
-        kind: "third_party_no_vat", origin: "pdf", evidenceIds: [note.evidenceId],
-      };
-    }
+    if (notes.length !== 1 || items.filter(sameItem).length !== 1) continue;
+    item.taxTreatment = {
+      kind: "third_party_no_vat", origin: "pdf", evidenceIds: [notes[0]!.evidenceId],
+    };
   }
 
   for (const label of labels) {
