@@ -53,6 +53,15 @@ export function reconcileInvoice(draft: InvoiceDraft): Finding[] {
     }
   }
 
+  if (draft.taxGroups.length === 0 && draft.fields.taxTotal &&
+      parseCents(draft.fields.taxTotal.value) !== 0n) {
+    findings.push({
+      id:"tax-breakdown",severity:"review",
+      message:"Es sind keine ausgewiesenen Steuergruppen erkennbar. Eine Aufteilung kann nicht berechnet werden.",
+      evidenceIds:draft.fields.taxTotal.evidenceIds,
+    });
+  }
+
   if (draft.taxGroups.length > 0 && draft.fields.taxTotal) {
     const amounts = draft.taxGroups.map(g => parseCents(g.tax));
     const total = parseCents(draft.fields.taxTotal.value);
@@ -92,6 +101,32 @@ export function reconcileInvoice(draft: InvoiceDraft): Finding[] {
         evidenceIds:item.evidenceIds,
       });
     }
+  }
+
+  function dateValue(value: string): number | null {
+    const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    const german = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(value.trim());
+    if (!iso && !german) return null;
+    const year = Number(iso?.[1] ?? german?.[3]);
+    const month = Number(iso?.[2] ?? german?.[2]);
+    const day = Number(iso?.[3] ?? german?.[1]);
+    const timestamp = Date.UTC(year, month-1, day);
+    const parsed = new Date(timestamp);
+    return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month-1 &&
+      parsed.getUTCDate() === day ? timestamp : null;
+  }
+  const invoiceDate = draft.fields.invoiceDate && dateValue(draft.fields.invoiceDate.value);
+  const dueDate = draft.fields.dueDate && dateValue(draft.fields.dueDate.value);
+  if (invoiceDate !== null && dueDate !== null && invoiceDate !== undefined &&
+    dueDate !== undefined && dueDate < invoiceDate) {
+    findings.push({
+      id:"date-order",severity:"review",
+      message:"Das Fälligkeitsdatum liegt vor dem Rechnungsdatum. Bitte Original prüfen.",
+      evidenceIds:[
+        ...(draft.fields.invoiceDate?.evidenceIds ?? []),
+        ...(draft.fields.dueDate?.evidenceIds ?? []),
+      ],
+    });
   }
 
   if (draft.items.some(item => !item.taxRate)) {
