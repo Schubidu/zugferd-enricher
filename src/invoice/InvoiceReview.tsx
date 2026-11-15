@@ -4,7 +4,7 @@ import type { FieldKey, InvoiceDraft, SourceLine } from "./model";
 import { FIELD_KEYS, FIELD_LABELS } from "./model";
 import { checkTotals, formatEuroCents, sumLineItemAmounts } from "./money";
 import PdfPreview from "./PdfPreview";
-import { CATEGORY_IDS, CATEGORY_LABELS, classifyDescription } from "./classify";
+import { CATEGORY_IDS, CATEGORY_LABELS, CATEGORY_REVIEW_STATUS_LABELS, classifyDescription, getCategoryReviewStatus } from "./classify";
 import type { Category, Classification } from "./classify";
 import { reconcileInvoice } from "./reconcile";
 import { summarizeCategories } from "./category-summary";
@@ -300,7 +300,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                           onChange={event => updateItem(item.id,"taxRate",event.currentTarget.value)}/>
                       </label>
                     </div>
-                    <label className="category-field">Kategorie (Vorschlag)
+                    <label className="category-field">Interne Kategorie
                       <select aria-label={"Position " + (index+1) + " Kategorie"}
                         value={assigned.category}
                         onChange={event => setCategory(item.id,event.currentTarget.value as Category)}>
@@ -311,11 +311,13 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                       <p className="position-review-note">Kein Steuersatz aus dem Original erkannt – hier prüfen.</p>
                     )}
                     <p className="category-origin">
-                      {assigned.source === "manual" ? "Manuell gewählt" :
+                      <strong>Kategoriestatus: {CATEGORY_REVIEW_STATUS_LABELS[getCategoryReviewStatus(assigned)]}</strong>
+                      {" · "}
+                      <span>{assigned.source === "manual" ? "Manuell gewählt" :
                         assigned.source === "rule" ? "Regelbasierter Vorschlag" :
                           assigned.source === "fasttext" ? "Lokaler fastText-Vorschlag · " +
                             Math.round((assigned.confidence ?? 0)*100) + " % Modellwahrscheinlichkeit" :
-                            "Keine sichere Zuordnung"}
+                            "Keine sichere Zuordnung"}</span>
                     </p>
                     {item.quantity && <p className="quiet">Menge: {item.quantity}{item.unitPrice ? " · Einzelpreis: " + item.unitPrice : ""}</p>}
                     {item.origin === "manual" && <p className="manual-warning">Manuelle Änderung – mit Original abgleichen.</p>}
@@ -379,9 +381,11 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
             )}
             <p className="quiet">
               Die Übersicht wird bei jeder Änderung von Kategorie oder Positionsbetrag automatisch aktualisiert.
-              Auch „Unbekannt“ bleibt sichtbar. Es werden nur erkannte Positionen addiert;
+              „Unbekannt“ bleibt von „Sonstiges“ getrennt; „Sonstiges“ wird nur bewusst manuell
+              zugeordnet. Ein Vorschlag ist nicht bestätigt. Die Rechnungsprüfung oben ist
+              unabhängig von diesen Kategorien. Es werden nur erkannte Positionen addiert;
               die Netto-/Brutto-Basis und Vollständigkeit sind nicht geprüft.
-              Kategorien ändern keine Steuersätze und stellen keine Steueraufteilung dar.
+              Kategorien ändern keine Steuersätze und werden nicht als ZUGFeRD-Klassifikationscodes verwendet.
             </p>
           </section>
           <section className="data-card" aria-labelledby="tax-groups-heading">
