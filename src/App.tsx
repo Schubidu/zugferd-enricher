@@ -16,11 +16,12 @@ function App() {
 
   function selectFile(file: File | null) {
     if (!file) return;
+    // Always reset the native picker so the same file can be reselected after a drop.
+    if (inputRef.current) inputRef.current.value = "";
     const reason = validatePdfSelection(file);
     if (reason) {
       setSelectedFile(null);
       setError(messages[reason]);
-      if (inputRef.current) inputRef.current.value = "";
       return;
     }
     setSelectedFile(file);

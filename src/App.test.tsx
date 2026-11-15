@@ -27,6 +27,32 @@ describe("invoice selection screen", () => {
     }
   });
 
+  it("clears the native picker after a valid selection, allowing re-selection after drag and drop", () => {
+    render(<App />);
+    const input = screen.getByLabelText(/PDF auswählen/i) as HTMLInputElement;
+    const clearInput = vi.spyOn(input, "value", "set");
+    const initial = new File(["first"], "initial.pdf", { type: "application/pdf" });
+    const dropped = new File(["second"], "dropped.pdf", { type: "application/pdf" });
+
+    fireEvent.change(input, { target: { files: [initial] } });
+    expect(screen.getByText("initial.pdf")).toBeInTheDocument();
+    expect(clearInput).toHaveBeenCalledTimes(1);
+    expect(clearInput).toHaveBeenLastCalledWith("");
+
+    fireEvent.drop(screen.getByRole("region", { name: "PDF-Datei auswählen" }), {
+      dataTransfer: { files: { item: () => dropped } },
+    });
+    expect(screen.getByText("dropped.pdf")).toBeInTheDocument();
+    expect(clearInput).toHaveBeenCalledTimes(2);
+    expect(clearInput).toHaveBeenLastCalledWith("");
+
+    // In a real browser, clearing the native value lets the user pick initial.pdf again.
+    fireEvent.change(input, { target: { files: [initial] } });
+    expect(screen.getByText("initial.pdf")).toBeInTheDocument();
+    expect(screen.queryByText("dropped.pdf")).not.toBeInTheDocument();
+    expect(clearInput).toHaveBeenCalledTimes(3);
+  });
+
   it("rejects unsupported file types and reports an accessible error", () => {
     render(<App />);
     fireEvent.change(screen.getByLabelText(/PDF auswählen/i), {
