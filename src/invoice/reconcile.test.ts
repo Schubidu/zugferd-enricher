@@ -74,4 +74,27 @@ describe("source-backed invoice reconciliation",()=>{
     ]));
     expect(draft.items[0]!.taxRate).toBeNull();
   });
+  it("flags absent VAT breakdown without allocating an implied rate",()=>{
+    const draft=makeDraft();
+    fieldsWithMoney(draft,"100,00","19,00","119,00");
+    expect(reconcileInvoice(draft)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id:"tax-breakdown",severity:"review",
+        evidenceIds:["tax"],
+      }),
+    ]));
+    expect(draft.taxGroups).toHaveLength(0);
+  });
+  it("flags due dates before invoice dates but abstains on ambiguous formats",()=>{
+    const draft=makeDraft();
+    draft.fields.invoiceDate={value:"15.11.2026",origin:"pdf",evidenceIds:["invoice-date"]};
+    draft.fields.dueDate={value:"2026-11-10",origin:"pdf",evidenceIds:["due-date"]};
+    expect(reconcileInvoice(draft)).toEqual(expect.arrayContaining([
+      expect.objectContaining({id:"date-order",severity:"review",
+        evidenceIds:["invoice-date","due-date"]}),
+    ]));
+    draft.fields.dueDate.value="11/10/2026";
+    expect(reconcileInvoice(draft).some(f=>f.id==="date-order")).toBe(false);
+  });
+
 });
