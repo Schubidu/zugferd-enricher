@@ -88,7 +88,7 @@ MIT (see LICENSE). Future model weights, WASM runtimes, XML schemas and conforma
 - No large OCR or VLM download is needed to read born-digital PDFs. An invoice can be opened and checked without loading fastText at all. Training/model downloads are independent of normal file selection.
 - The current parser still handles only a subset of invoice layouts and cannot establish that every item was recognized. Invoices with missing or conflicting fields must be reviewed manually before any future export.
 
-**Model provenance:** the browser runtime [DreamOfIce/fasttext.wasm](https://github.com/DreamOfIce/fasttext.wasm) is MIT licensed; the upstream fastText documentation is at [fasttext.cc](https://fasttext.cc/docs/en/webassembly-module.html). Model data are project-generated synthetic examples. This project's model size, download latency and license review should be measured on an actual Cloudflare preview before merging.
+**Model provenance:** Browser inference uses [fasttext-pure-rs](https://github.com/silvermine/fasttext-pure-rs) (MIT) compiled with Rust 1.89 to a standalone `wasm32-unknown-unknown` asset. **No Emscripten, embind, generated JS loader or `unsafe-eval` is required.** The current `.ftz` model remains unchanged and is created from synthetic examples. Rebuild using `scripts/build-classifier-wasm.sh` and the checked-in `rust/invoice-classifier/Cargo.lock`. The WASM is a same-origin, versioned static asset.
 
 ### Live category overview
 
@@ -97,9 +97,9 @@ The review screen summarizes **recognized** invoice line amounts by category, in
 
 ### Safari / iOS 27 local WASM troubleshooting
 
-- The Worker and its fastText Emscripten loader are **same-origin, static assets**. Safari 27 supports WebAssembly and module workers; a Safari-version-specific fallback or JSPI polyfill is **not** needed for this older synchronous fastText runtime.
+- The Worker and pure-Rust fastText inference WASM are **same-origin static assets**; no Emscripten or dynamic JavaScript evaluation is involved. Safari/WebKit 27 can run the direct runtime with the strict CSP.
 - The Cloudflare asset security policy uses \`script-src 'self' 'wasm-unsafe-eval'\` to enable **only** WebAssembly compilation. Do **not** add general \`'unsafe-eval'\`, \`'unsafe-inline'\` or broad third-party hosts.
 - Worker failures and model-loading failures are now reported using non-sensitive **stage-specific error codes**: worker startup, unavailable WASM (including possible iOS Lockdown Mode restrictions), runtime initialization, model fetch, model decoding or prediction. Invoice text and file names must never be sent to an error collector or included in error logs.
-- Confirm in iOS Safari developer tools that the \`.ftz\`, emitted \`.wasm\`, emitted loader \`.mjs\` and Worker script all return 200 with correct MIME types (not an SPA HTML fallback); \`.wasm\` should be served as \`application/wasm\`. Chrome-on-iPhone uses WebKit too, so a separate Chrome test does not validate another JS engine.
+- Check the `.ftz`, `fasttext-rust-v1.wasm` and module Worker files for HTTP 200 and correct MIME types. The old Emscripten `.mjs` loader is no longer required. A successful WebKit desktop test does not replace an actual iPhone/iOS 27 acceptance test.
 - Safari's Lockdown Mode can restrict complex web technologies; if WebAssembly is unavailable, the app must preserve rule-based category suggestions. Test on an **actual iPhone with iOS 27** before declaring this hardware issue resolved.
 - iOS 27's performance regression for plain-HTTP LAN dev servers does not apply to our HTTPS Cloudflare preview. No need for cross-origin isolation or threads for this small single-threaded model.
