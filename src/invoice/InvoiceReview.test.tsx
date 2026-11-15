@@ -75,7 +75,7 @@ describe("position sum in the browser invoice review", () => {
 
   it("shows actionable warnings before the long list of positions", () => {
     render(<Harness />);
-    const status = screen.getByRole("heading", {name:"Rechnerische Plausibilitätsprüfung"});
+    const status = screen.getByRole("heading", {name:"Prüfhinweise"});
     const positions = screen.getByRole("heading", {name:"Rechnungspositionen"});
     expect(status.compareDocumentPosition(positions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText(/Position\(en\) ohne belegten Steuersatz/i)).toBeInTheDocument();
@@ -118,7 +118,7 @@ describe("position sum in the browser invoice review", () => {
       items: [{...initialDraft.items[0]!,description:"Kurtaxe",taxRate:null,quantity:null,unitPrice:null}],
     };
     render(<InvoiceReview pdf={pdf} draft={draft} onDraftChange={vi.fn()} />);
-    expect(screen.getByRole("heading",{name:"Rechnerische Plausibilitätsprüfung"})).toBeInTheDocument();
+    expect(screen.getByRole("heading",{name:"Prüfhinweise"})).toBeInTheDocument();
     expect(screen.getByText(/Netto \+ Steuer weicht/i)).toBeInTheDocument();
     expect(screen.getByText(/Kategorien ersetzen keine Steuerangaben/i)).toBeInTheDocument();
     expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("city_tax");
@@ -225,7 +225,7 @@ describe("position sum in the browser invoice review", () => {
       },
     };
     render(<InvoiceReview pdf={pdf} draft={draft} onDraftChange={vi.fn()} />);
-    expect(screen.getByText(/Summen nicht vollständig prüfbar/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dokumentsumme nicht vollständig belegbar/i)).toBeInTheDocument();
     expect(screen.getByText(/Manuell geänderte Summen sind nicht durch das Original belegt/i)).toBeInTheDocument();
     expect(screen.queryByText(/rechnerisch konsistent/i)).not.toBeInTheDocument();
   });
@@ -251,5 +251,38 @@ describe("position sum in the browser invoice review", () => {
     });
     expect(first).toHaveTextContent("Kategoriestatus: Unbekannt – prüfen");
     expect(first).toHaveClass("line-item--unclassified");
+  });
+  it("hides findings UI when source-backed arithmetic has no findings", () => {
+    const draft: InvoiceDraft = {
+      ...initialDraft,
+      fields: {
+        ...emptyFields(),
+        netTotal: {value:"100,00", origin:"pdf", evidenceIds:["net"]},
+        taxTotal: {value:"19,00", origin:"pdf", evidenceIds:["tax"]},
+        grossTotal: {value:"119,00", origin:"pdf", evidenceIds:["gross"]},
+      },
+      taxGroups: [{rate:"19%", net:"100,00", tax:"19,00", evidenceIds:["group"]}],
+      items: [{
+        id:"source-item", description:"Beratungsleistung", quantity:"1",
+        unitPrice:"100,00", amount:"100,00", taxRate:"19%",
+        evidenceIds:["item"], origin:"pdf",
+      }],
+    };
+    render(<InvoiceReview pdf={pdf} draft={draft} onDraftChange={vi.fn()} />);
+    expect(screen.queryByRole("heading",{name:"Prüfhinweise"})).not.toBeInTheDocument();
+    expect(screen.queryByText(/keine rechnerischen Abweichungen/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/rechnerisch konsistent/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading",{name:"Rechnungsangaben"})).toBeInTheDocument();
+    expect(screen.getByRole("heading",{name:"Rechnungspositionen"})).toBeInTheDocument();
+    expect(screen.getByRole("textbox",{name:"Brutto"})).toHaveValue("119,00");
+  });
+
+  it("shows actionable review needs rather than a redundant success summary", () => {
+    render(<Harness />);
+    expect(screen.getByRole("heading",{name:"Prüfhinweise"})).toBeInTheDocument();
+    expect(screen.getByText(/Dokumentsumme nicht vollständig belegbar/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Wähle eine Position zum Bearbeiten/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/keine rechnerischen Abweichungen/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button",{name:"Position 7: Kurtaxe bearbeiten"})).toBeInTheDocument();
   });
 });
