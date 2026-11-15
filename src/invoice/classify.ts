@@ -19,7 +19,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   hardware: "Hardware",
   office_supplies: "Bürobedarf",
   other: "Sonstiges",
-  unknown: "Unbekannt – prüfen",
+  unknown: "Unbekannt",
 };
 export type Classification = {
   category: Category;
@@ -30,7 +30,7 @@ export type Classification = {
 /** Classification confidence is not invoice provenance or fiscal validation. */
 export type CategoryReviewStatus = "unknown" | "suggested" | "confirmed";
 export const CATEGORY_REVIEW_STATUS_LABELS: Record<CategoryReviewStatus, string> = {
-  unknown: "Unbekannt – prüfen",
+  unknown: "Unbekannt",
   suggested: "Vorgeschlagen – nicht bestätigt",
   confirmed: "Manuell zugeordnet",
 };
