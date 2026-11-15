@@ -8,6 +8,7 @@ import { CATEGORY_IDS, CATEGORY_LABELS, classifyDescription } from "./classify";
 import type { Category, Classification } from "./classify";
 import { reconcileInvoice } from "./reconcile";
 import { summarizeCategories } from "./category-summary";
+import { modelErrorMessage } from "./model-errors";
 
 type Props = {
   pdf: PDFDocumentProxy;
@@ -48,10 +49,8 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
           ...Object.fromEntries(Object.entries(previous).filter(([, entry]) => entry.source === "manual")),
         }));
       }
-    } catch {
-      if (!controller.signal.aborted) setClassificationError(
-        "Das lokale fastText-Modell konnte nicht geladen werden. Regelbasierte Vorschläge bleiben verfügbar.",
-      );
+    } catch (error) {
+      if (!controller.signal.aborted) setClassificationError(modelErrorMessage(error));
     } finally {
       if (!controller.signal.aborted) setClassifying(false);
     }

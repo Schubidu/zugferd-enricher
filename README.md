@@ -93,3 +93,13 @@ MIT (see LICENSE). Future model weights, WASM runtimes, XML schemas and conforma
 ### Live category overview
 
 The review screen summarizes **recognized** invoice line amounts by category, including unknown/uncategorized lines and exempt city tax when itemized. Every change to a category or position amount recalculates the grouped count and exact integer-cent sum immediately, without storing a second copy of totals. Invalid amounts suppress that category's total rather than showing a misleading partial sum. A category sum does **not** establish completeness, net/gross comparability, or VAT treatment; it is not compared automatically to the supplier's gross invoice total.
+
+
+### Safari / iOS 27 local WASM troubleshooting
+
+- The Worker and its fastText Emscripten loader are **same-origin, static assets**. Safari 27 supports WebAssembly and module workers; a Safari-version-specific fallback or JSPI polyfill is **not** needed for this older synchronous fastText runtime.
+- The Cloudflare asset security policy uses \`script-src 'self' 'wasm-unsafe-eval'\` to enable **only** WebAssembly compilation. Do **not** add general \`'unsafe-eval'\`, \`'unsafe-inline'\` or broad third-party hosts.
+- Worker failures and model-loading failures are now reported using non-sensitive **stage-specific error codes**: worker startup, unavailable WASM (including possible iOS Lockdown Mode restrictions), runtime initialization, model fetch, model decoding or prediction. Invoice text and file names must never be sent to an error collector or included in error logs.
+- Confirm in iOS Safari developer tools that the \`.ftz\`, emitted \`.wasm\`, emitted loader \`.mjs\` and Worker script all return 200 with correct MIME types (not an SPA HTML fallback); \`.wasm\` should be served as \`application/wasm\`. Chrome-on-iPhone uses WebKit too, so a separate Chrome test does not validate another JS engine.
+- Safari's Lockdown Mode can restrict complex web technologies; if WebAssembly is unavailable, the app must preserve rule-based category suggestions. Test on an **actual iPhone with iOS 27** before declaring this hardware issue resolved.
+- iOS 27's performance regression for plain-HTTP LAN dev servers does not apply to our HTTPS Cloudflare preview. No need for cross-origin isolation or threads for this small single-threaded model.
