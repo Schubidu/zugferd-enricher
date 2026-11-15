@@ -230,4 +230,26 @@ describe("position sum in the browser invoice review", () => {
     expect(screen.queryByText(/rechnerisch konsistent/i)).not.toBeInTheDocument();
   });
 
+
+  it("distinguishes unknown, suggestions and deliberate other in the review UI", () => {
+    render(<Harness />);
+    const first = screen.getByText("Position 1").closest(".line-item");
+    const last = screen.getByText("Position 7").closest(".line-item");
+    expect(first).toHaveTextContent("Kategoriestatus: Unbekannt – prüfen");
+    expect(last).toHaveTextContent("Kategoriestatus: Vorgeschlagen – nicht bestätigt");
+    const taxRate = screen.getByRole("textbox", {name: "Position 1 Steuersatz"});
+    expect(taxRate).toHaveValue("7%");
+    fireEvent.change(screen.getByRole("combobox", {name: "Position 1 Kategorie"}), {
+      target: {value: "other"},
+    });
+    expect(first).toHaveTextContent("Kategoriestatus: Manuell zugeordnet");
+    expect(first).not.toHaveClass("line-item--unclassified");
+    expect(screen.getByRole("table")).toHaveTextContent("Sonstiges");
+    expect(taxRate).toHaveValue("7%");
+    fireEvent.change(screen.getByRole("combobox", {name: "Position 1 Kategorie"}), {
+      target: {value: "unknown"},
+    });
+    expect(first).toHaveTextContent("Kategoriestatus: Unbekannt – prüfen");
+    expect(first).toHaveClass("line-item--unclassified");
+  });
 });
