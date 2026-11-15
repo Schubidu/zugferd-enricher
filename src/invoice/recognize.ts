@@ -90,8 +90,6 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
       taxGroups.push({ rate: group[1]! + "%", net: group[2]!, tax: group[3]!, evidenceIds: [line.id] });
       continue;
     }
-    if (taxSummary.test(line.text)) continue;
-
     let isLabel = false;
     for (const label of labels) {
       const match = label.regex.exec(line.text);
@@ -116,6 +114,8 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
       break;
     }
     if (isLabel) continue;
+    // Explicit invoice tax totals were handled above; exclude remaining tax summaries from positions.
+    if (taxSummary.test(line.text)) continue;
 
     if (/\b(?:Summe|Total|Zwischensumme|Subtotal|Gesamt|Rechnung|Invoice)\b/i.test(line.text)) continue;
     const match = itemPattern.exec(line.text.trim());
