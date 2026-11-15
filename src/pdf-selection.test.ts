@@ -24,6 +24,7 @@ describe("PDF selection validation", () => {
 
   it("formats file sizes for the UI", () => {
     expect(formatFileSize(5)).toBe("5 B");
+    expect(formatFileSize(1024)).toBe("1 KB");
     expect(formatFileSize(1024 * 1024)).toBe("1 MB");
   });
 });
