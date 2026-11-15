@@ -89,3 +89,7 @@ MIT (see LICENSE). Future model weights, WASM runtimes, XML schemas and conforma
 - The current parser still handles only a subset of invoice layouts and cannot establish that every item was recognized. Invoices with missing or conflicting fields must be reviewed manually before any future export.
 
 **Model provenance:** the browser runtime [DreamOfIce/fasttext.wasm](https://github.com/DreamOfIce/fasttext.wasm) is MIT licensed; the upstream fastText documentation is at [fasttext.cc](https://fasttext.cc/docs/en/webassembly-module.html). Model data are project-generated synthetic examples. This project's model size, download latency and license review should be measured on an actual Cloudflare preview before merging.
+
+### Live category overview
+
+The review screen summarizes **recognized** invoice line amounts by category, including unknown/uncategorized lines and exempt city tax when itemized. Every change to a category or position amount recalculates the grouped count and exact integer-cent sum immediately, without storing a second copy of totals. Invalid amounts suppress that category's total rather than showing a misleading partial sum. A category sum does **not** establish completeness, net/gross comparability, or VAT treatment; it is not compared automatically to the supplier's gross invoice total.

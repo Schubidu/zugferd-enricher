@@ -7,6 +7,7 @@ import PdfPreview from "./PdfPreview";
 import { CATEGORY_IDS, CATEGORY_LABELS, classifyDescription } from "./classify";
 import type { Category, Classification } from "./classify";
 import { reconcileInvoice } from "./reconcile";
+import { summarizeCategories } from "./category-summary";
 
 type Props = {
   pdf: PDFDocumentProxy;
@@ -27,6 +28,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
     draft.fields.grossTotal?.value ?? null,
   );
   const positionSum = sumLineItemAmounts(draft.items);
+  const categorySummary = summarizeCategories(draft.items, classifications);
   const findings = reconcileInvoice(draft);
 
   async function runClassification() {
@@ -215,6 +217,48 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                 Deshalb ist dies kein automatischer Abgleich mit dem Rechnungsbetrag.
               </p>
             </div>
+          </section>
+          <section className="data-card" aria-labelledby="category-summary-heading">
+            <h3 id="category-summary-heading">Kategorienübersicht</h3>
+            {categorySummary.length === 0 ? (
+              <p className="quiet">Noch keine Rechnungspositionen erkannt.</p>
+            ) : (
+              <div className="category-summary-scroll">
+                <table className="category-summary-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Kategorie</th>
+                      <th scope="col">Positionen</th>
+                      <th scope="col">Summe</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categorySummary.map(group => (
+                      <tr key={group.category}>
+                        <th scope="row">{CATEGORY_LABELS[group.category]}</th>
+                        <td>{group.count}</td>
+                        <td>
+                          {group.totalCents === null
+                            ? "Nicht berechenbar"
+                            : formatEuroCents(group.totalCents)}
+                          {group.invalidCount > 0 && (
+                            <span className="category-summary-invalid">
+                              {" · " + group.invalidCount + " ungültige Betragsangabe(n)"}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="quiet">
+              Die Übersicht wird bei jeder Änderung von Kategorie oder Positionsbetrag automatisch aktualisiert.
+              Auch „Unbekannt“ bleibt sichtbar. Es werden nur erkannte Positionen addiert;
+              die Netto-/Brutto-Basis und Vollständigkeit sind nicht geprüft.
+              Kategorien ändern keine Steuersätze und stellen keine Steueraufteilung dar.
+            </p>
           </section>
           <section className="data-card" aria-labelledby="reconciliation-heading">
             <h3 id="reconciliation-heading">Rechnerische Plausibilitätsprüfung</h3>

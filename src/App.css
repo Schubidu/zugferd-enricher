@@ -144,3 +144,16 @@ h1 span { color: #47749c; }
 .reconciliation-info { background: #f1f5fa; }
 .reconciliation-review { background: #fff9ed; color: #664009; }
 .reconciliation-mismatch { background: #ffeded; color: #822f34; }
+
+.category-summary-scroll { overflow-x: auto; }
+.category-summary-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.category-summary-table th, .category-summary-table td {
+  text-align: left; padding: 11px 8px; border-bottom: 1px solid #dfe6ef;
+  vertical-align: top;
+}
+.category-summary-table thead th { color: #40576d; font-size: .82rem; }
+.category-summary-table tbody th { font-weight: 650; }
+.category-summary-table th:first-child { padding-left: 0; }
+.category-summary-table td:nth-child(2) { text-align: center; }
+.category-summary-table td:last-child { text-align: right; white-space: normal; }
+.category-summary-invalid { display: block; font-size: .78rem; color: #8a2930; }

@@ -86,6 +86,47 @@ describe("position sum in the browser invoice review", () => {
     expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("city_tax");
   });
 
+  it("shows category totals and reassigns an amount immediately when a category changes", () => {
+    render(<Harness />);
+    const table = screen.getByRole("table");
+    expect(table).toHaveTextContent("Unbekannt – prüfen");
+    expect(table).toHaveTextContent("6");
+    expect(table).toHaveTextContent("421,00 €");
+    expect(table).toHaveTextContent("Kurtaxe / Beherbergungssteuer");
+    expect(table).toHaveTextContent("10,50 €");
+
+    fireEvent.change(screen.getByRole("combobox", {name:"Position 1 Kategorie"}), {
+      target:{value:"accommodation"},
+    });
+    expect(table).toHaveTextContent("Übernachtung");
+    expect(table).toHaveTextContent("105,00 €");
+    expect(table).toHaveTextContent("316,00 €");
+    expect(table).toHaveTextContent("5");
+    // Reclassification does not affect the overall position sum.
+    expect(screen.getByText("431,50 €")).toBeInTheDocument();
+  });
+
+  it("updates the category amount sum immediately after editing a position", () => {
+    render(<Harness />);
+    const table = screen.getByRole("table");
+    fireEvent.change(screen.getByRole("textbox", {name:"Position 1 Betrag"}), {
+      target:{value:"106,00"},
+    });
+    expect(table).toHaveTextContent("422,00 €");
+    expect(screen.getByText("432,50 €")).toBeInTheDocument();
+  });
+
+  it("never displays a partial category sum after an invalid amount", () => {
+    render(<Harness />);
+    fireEvent.change(screen.getByRole("textbox", {name:"Position 2 Betrag"}), {
+      target:{value:"invalid"},
+    });
+    const table = screen.getByRole("table");
+    expect(table).toHaveTextContent("Nicht berechenbar");
+    expect(table).toHaveTextContent("1 ungültige Betragsangabe(n)");
+    expect(table).toHaveTextContent("10,50 €");
+  });
+
   it("manual category changes do not modify extracted tax rates or amounts", () => {
     render(<Harness />);
     expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("unknown");
