@@ -61,3 +61,59 @@ h1 span { color: #47749c; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; }
 }
+
+.read-button { display: block; margin: 18px auto 0; background: #1c5d57; color: white; border: 0; border-radius: 10px; padding: 12px 22px; cursor: pointer; font-weight: 700; }
+.read-button:hover:not(:disabled) { background: #164a45; }
+.read-button:disabled { opacity: .65; cursor: progress; }
+.review-workspace { margin: 25px 0 55px; }
+.review-intro { max-width: 760px; margin: 0 auto 22px; }
+.review-intro h2 { font-size: 1.6rem; margin: 0 0 10px; }
+.review-intro p { line-height: 1.6; color: #455d73; margin: 0; }
+.review-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.pdf-preview, .data-card { background: white; border: 1px solid #dae3ed; border-radius: 14px; overflow: hidden; }
+.pdf-preview { position: sticky; top: 14px; }
+.preview-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #dae3ed; }
+.pager { display: flex; align-items: center; gap: 12px; font-size: .87rem; }
+.pager button { cursor: pointer; background: #f1f5fa; border: 1px solid #b9c9d9; border-radius: 7px; min-width: 36px; min-height: 36px; font-size: 1.3rem; }
+.pager button:disabled { cursor: default; opacity: .5; }
+.pdf-scroll { padding: 12px; overflow: auto; max-height: 76vh; background: #d9e0e8; }
+.pdf-paper { position: relative; max-width: 100%; margin: auto; background: white; box-shadow: 0 3px 10px #62738833; }
+.pdf-paper canvas { display: block; width: 100%; height: 100%; }
+.evidence-overlay { position: absolute; inset: 0; pointer-events: none; }
+.evidence-highlight { position: absolute; border: 2px solid #cc681c; background: #ffb74a55; border-radius: 2px; }
+.invoice-data { display: grid; gap: 14px; min-width: 0; }
+.data-card { padding: 18px; }
+.data-card h3 { font-size: 1.09rem; margin: 0 0 16px; }
+.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.invoice-field, .line-item label { min-width: 0; display: grid; gap: 5px; font-size: .82rem; font-weight: 650; }
+.invoice-field input, .line-item input { min-width: 0; width: 100%; border: 1px solid #b2c2d4; background: white; color: #152238; border-radius: 8px; padding: 10px; font-size: .93rem; }
+.field-meta { display: flex; gap: 7px; justify-content: space-between; align-items: center; flex-wrap: wrap; font-size: .72rem; color: #52667b; font-weight: 400; }
+.evidence-link { padding: 3px 5px; border: 0; background: none; color: #225b94; text-decoration: underline; cursor: pointer; font-size: .76rem; font-weight: 650; }
+.evidence-link:hover { color: #163e68; }
+.total-check { padding: 12px; border-radius: 8px; margin: 15px 0 0; font-size: .86rem; line-height: 1.5; }
+.total-check.match { background: #e5f2e9; color: #1a5530; }
+.total-check.unknown { background: #f1f4f8; color: #334c64; }
+.total-check.mismatch { background: #fce8e6; color: #8a2930; }
+.quiet { color: #506477; line-height: 1.5; font-size: .85rem; margin: 6px 0; font-weight: 400; }
+.line-items { display: grid; gap: 13px; }
+.line-item { border-top: 1px solid #dce4ed; padding-top: 13px; }
+.line-item-title { display: flex; align-items: center; justify-content: space-between; }
+.line-item-values { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 9px; }
+.manual-warning { font-size: .76rem; color: #8c4a0c; }
+.tax-group { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 7px 0; font-size: .85rem; }
+.warnings { background: #fffaf0; }
+.warnings li { margin: 7px 0; line-height: 1.5; }
+.raw-lines summary { cursor: pointer; font-weight: 650; }
+.raw-lines ol { padding-left: 25px; max-height: 290px; overflow: auto; }
+.raw-lines li { margin: 6px 0; }
+.source-row { text-align: left; border: 0; background: none; cursor: pointer; line-height: 1.4; overflow-wrap: anywhere; }
+.source-row span { color: #245a91; font-weight: 700; margin-right: 4px; }
+@media (max-width: 950px) {
+  .review-grid { grid-template-columns: 1fr; }
+  .pdf-preview { position: static; }
+  .pdf-scroll { max-height: 580px; }
+}
+@media (max-width: 480px) {
+  .field-grid, .line-item-values { grid-template-columns: 1fr; }
+  .data-card { padding: 14px; }
+}
