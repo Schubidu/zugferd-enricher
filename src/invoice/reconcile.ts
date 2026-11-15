@@ -1,3 +1,4 @@
+import { isSourceBackedNoVat } from "./model";
 import type { InvoiceDraft } from "./model";
 import { checkTotals, formatEuroCents, parseCents } from "./money";
 
@@ -96,15 +97,28 @@ export function reconcileInvoice(draft: InvoiceDraft): Finding[] {
     const total = parseCents(pdfAmount("netTotal")!);
     if (total !== null && amounts.every(x => x !== null)) {
       const groupNet = amounts.reduce<bigint>((sum, amount) => sum + amount!, 0n);
-      if (groupNet !== total) {
-        findings.push({
-          id: "net-summary", severity: "review",
-          message: "Erkannte Steuergruppen: " + formatEuroCents(groupNet) + " netto; ausgewiesenes Gesamtnetto: " + formatEuroCents(total) + ". Differenz: " + formatEuroCents(total - groupNet) + ". Bitte prüfen, ob weitere oder steuerfreie Positionen nicht in den Gruppen enthalten sind.",
-          evidenceIds: [
-            ...draft.taxGroups.flatMap(group => group.evidenceIds),
-            ...(draft.fields.netTotal?.evidenceIds ?? []),
-          ],
-        });
+      const outsideVatItems = draft.items.filter(isSourceBackedNoVat);
+      const outsideVatAmounts = outsideVatItems.map(item => parseCents(item.amount));
+      // TEST-05 includes a third-party pass-through in its printed net sum.
+      // Count only uniquely source-linked items, never an inferred 0% rate.
+      if (outsideVatAmounts.every(value => value !== null)) {
+        const outsideVatSum = outsideVatAmounts.reduce<bigint>((sum, value) => sum + value!, 0n);
+        const explainedNet = groupNet + outsideVatSum;
+        if (explainedNet !== total) {
+          findings.push({
+            id: "net-summary", severity: "review",
+            message: "Erkannte Steuergruppen" +
+              (outsideVatItems.length > 0 ? " und belegte Positionen ohne Umsatzsteuer" : "") +
+              ": " + formatEuroCents(explainedNet) + "; ausgewiesenes Gesamtnetto: " +
+              formatEuroCents(total) + ". Differenz: " + formatEuroCents(total - explainedNet) +
+              ". Bitte prüfen, ob weitere Positionen fehlen.",
+            evidenceIds: [
+              ...draft.taxGroups.flatMap(group => group.evidenceIds),
+              ...outsideVatItems.flatMap(item => item.taxTreatment!.evidenceIds),
+              ...(draft.fields.netTotal?.evidenceIds ?? []),
+            ],
+          });
+        }
       }
     }
   }
@@ -179,10 +193,11 @@ export function reconcileInvoice(draft: InvoiceDraft): Finding[] {
     });
   }
 
-  if (draft.items.some(item => !item.taxRate)) {
+  const unresolvedTax = draft.items.filter(item => !item.taxRate && !isSourceBackedNoVat(item));
+  if (unresolvedTax.length > 0) {
     findings.push({id:"missing-tax-rates",severity:"review",
-      message: draft.items.filter(item => !item.taxRate).length + " Position(en) ohne belegten Steuersatz. Über die Positionslinks direkt prüfen; Kategorien ersetzen keine Steuerangaben.",
-      evidenceIds:draft.items.filter(item=>!item.taxRate).flatMap(item=>item.evidenceIds)});
+      message: unresolvedTax.length + " Position(en) ohne belegten Steuersatz oder Steuerstatus. Über die Positionslinks direkt prüfen; Kategorien ersetzen keine Steuerangaben.",
+      evidenceIds: unresolvedTax.flatMap(item => item.evidenceIds)});
   }
 
   return findings;
