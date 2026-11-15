@@ -31,6 +31,8 @@ function App() {
 
   function clearLoaded() {
     generation.current++;
+    extractionController.current?.abort();
+    extractionController.current = null;
     if (loadedRef.current) void loadedRef.current.pdf.loadingTask.destroy();
     loadedRef.current = null;
     setLoaded(null);
