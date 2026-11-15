@@ -80,7 +80,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as temp:
         train = Path(temp) / "training.txt"
         lines = [
-            "__label__" + category + " " + variant.format(base)
+            "__label__" + category + " " + variant.format(base).lower()
             for category, entries in CATEGORIES.items()
             for base in entries
             for variant in CONTEXTS
