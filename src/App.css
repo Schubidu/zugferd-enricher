@@ -201,3 +201,46 @@ h1 span { color: #47749c; }
 .line-item--unclassified .category-field select {
   border-color: #a56b19;
 }
+
+
+/* Review findings appear before long position lists; each issue is actionable. */
+.review-findings {
+  margin: 16px 0 20px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #d5e0ed;
+  border-radius: 14px;
+}
+.review-findings-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.review-findings-heading h3 { margin: 0; font-size: 1.1rem; }
+.review-findings-heading span { color: #526477; font-size: .86rem; }
+.review-findings .reconciliation-findings { grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); }
+.reconciliation-findings p { margin: 0 0 9px; }
+.finding-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.review-action { font: inherit; font-size: .81rem; color: #17527f; background: #fff; border: 1px solid #a4bacb; border-radius: 7px; padding: 8px 10px; min-height: 42px; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.review-action:focus-visible, .evidence-dialog button:focus-visible { outline: 3px solid #3669b6; outline-offset: 2px; }
+.position-review-note { margin: 8px 0 0; padding: 8px; color: #69420b; background: #fff3d7; border-left: 3px solid #ac751f; font-size: .83rem; line-height: 1.5; }
+.line-item { scroll-margin-top: 20px; }
+.evidence-dialog {
+  position: fixed; inset: 0;
+  width: min(98vw, 900px);
+  max-width: 900px;
+  max-height: 96dvh;
+  margin: auto;
+  padding: 0;
+  border: 1px solid #bacad8;
+  border-radius: 14px;
+  box-shadow: 0 15px 70px #132b4680;
+}
+.evidence-dialog::backdrop { background: #101b2db8; }
+.evidence-dialog-content { display: grid; gap: 8px; padding: 12px; max-height: 94dvh; overflow: auto; }
+.evidence-dialog-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.evidence-dialog-toolbar button { background: #1d416c; border: 0; color: #fff; padding: 10px 14px; border-radius: 8px; min-height: 44px; cursor: pointer; }
+.evidence-dialog .pdf-preview { position: static; min-width: 0; }
+.evidence-dialog .pdf-scroll { max-height: min(76dvh, 780px); }
+@media (max-width: 670px) {
+  .review-findings { padding: 12px; }
+  .evidence-dialog { width: 100vw; max-width: none; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+  .evidence-dialog-content { max-height: 100dvh; }
+  .evidence-dialog .pdf-scroll { max-height: calc(100dvh - 190px); }
+}

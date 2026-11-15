@@ -22,7 +22,20 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
   const [classifying, setClassifying] = useState(false);
   const [classificationError, setClassificationError] = useState<string | null>(null);
   const classificationController = useRef<AbortController | null>(null);
+  const inspectorRef = useRef<HTMLDialogElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const [inspectedEvidence, setInspectedEvidence] = useState<string | null>(null);
   useEffect(() => () => classificationController.current?.abort(), []);
+  useEffect(() => {
+    if (!inspectedEvidence) return;
+    const dialog = inspectorRef.current;
+    if (!dialog) return;
+    if (typeof dialog.showModal === "function" && !dialog.open) dialog.showModal();
+    return () => {
+      if (typeof dialog.close === "function" && dialog.open) dialog.close();
+      returnFocusRef.current?.focus();
+    };
+  }, [inspectedEvidence]);
   // Manual edits remain visible but cannot make PDF-backed reconciliation pass.
   const totals = checkTotals(
     draft.fields.netTotal?.origin === "pdf" ? draft.fields.netTotal.value : null,
@@ -62,12 +75,22 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
       ...previous, [id]: {category, source:"manual",confidence:null},
     }));
   }
-  function focusEvidence(id: string) {
+  function focusEvidence(id: string, openInspector = false) {
     const line = draft.sourceLines.find(x => x.id === id);
     if (line) {
       setPage(line.page);
       setActiveEvidenceId(line.id);
+      if (openInspector) {
+        returnFocusRef.current = document.activeElement as HTMLElement | null;
+        setInspectedEvidence(line.id);
+      }
     }
+  }
+  function focusReviewSection(id: string) {
+    const target = document.getElementById(id);
+    target?.scrollIntoView?.({behavior: "smooth", block: "center"});
+    const input = target?.querySelector<HTMLInputElement>("input, select, button");
+    input?.focus({preventScroll: true});
   }
   function updateField(key: FieldKey, value: string) {
     const old = draft.fields[key];
@@ -100,8 +123,8 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
     // For two-line fields the value is on the last evidence line, not the label.
     const source = lines.find(line => line.id === ids.at(-1));
     return source ? (
-      <button className="evidence-link" type="button" onClick={() => focusEvidence(source.id)}>
-        Fundstelle S. {source.page}
+      <button className="evidence-link" type="button" onClick={() => focusEvidence(source.id, true)}>
+        Fundstelle S. {source.page} im PDF ansehen
       </button>
     ) : null;
   }
@@ -111,6 +134,69 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
         <h2>Erkannte Rechnungsdaten</h2>
         <p>Dies ist ein prüfbarer Entwurf, keine berichtigte Rechnung. Erkannte Daten sind Vorschläge; manuelle Korrekturen gelten nicht als durch das Original belegt.</p>
       </div>
+      <section className="review-findings" aria-labelledby="reconciliation-heading">
+        <div className="review-findings-heading">
+          <h3 id="reconciliation-heading">Prüfpunkte</h3>
+          <span>{findings.length} {findings.length === 1 ? "Hinweis" : "Hinweise"}</span>
+        </div>
+        <p className="quiet">
+          Wähle eine Position zum Bearbeiten oder öffne die markierte Fundstelle direkt im Original.
+          Fehlende Steuerangaben werden nicht automatisch geschätzt.
+        </p>
+        {findings.length === 0 ? (
+          <p className="total-check match">Keine rechnerischen Abweichungen in den prüfbaren Angaben gefunden.</p>
+        ) : (
+          <ul className="reconciliation-findings">
+            {findings.map(finding => (
+              <li className={"reconciliation-" + finding.severity} key={finding.id}>
+                <p>{finding.message}</p>
+                <div className="finding-actions">
+                  {finding.id === "missing-tax-rates" ? (
+                    draft.items.filter(item => !item.taxRate).map(item => {
+                      const index = draft.items.findIndex(entry => entry.id === item.id);
+                      return (
+                        <button
+                          type="button" className="review-action" key={item.id}
+                          onClick={() => focusReviewSection("line-item-" + item.id)}
+                        >
+                          Position {index + 1}: {item.description} bearbeiten
+                        </button>
+                      );
+                    })
+                  ) : finding.id.startsWith("manual-item-") || finding.id.startsWith("quantity-") ? (
+                    <button className="review-action" type="button"
+                      onClick={() => focusReviewSection("line-item-" + finding.id.replace(/^(?:manual-item-|quantity-)/, ""))}>
+                      Betroffene Position bearbeiten
+                    </button>
+                  ) : finding.id === "net-summary" || finding.id === "tax-summary" ||
+                    finding.id === "tax-breakdown" || finding.id.startsWith("tax-") ? (
+                    <button className="review-action" type="button" onClick={() => focusReviewSection("tax-groups-heading")}>
+                      Steuergruppen prüfen
+                    </button>
+                  ) : (
+                    <button className="review-action" type="button" onClick={() => focusReviewSection("invoice-fields-heading")}>
+                      Rechnungsangaben prüfen
+                    </button>
+                  )}
+                  {finding.id === "net-summary" && draft.fields.netTotal && (
+                    <button className="review-action" type="button"
+                      onClick={() => focusEvidence(draft.fields.netTotal!.evidenceIds.at(-1) ?? "", true)}>
+                      Gesamtnetto im PDF ansehen
+                    </button>
+                  )}
+                  {finding.id === "net-summary" && draft.taxGroups.map((group, index) => (
+                    <button className="review-action" type="button" key={index}
+                      onClick={() => focusEvidence(group.evidenceIds.at(-1) ?? "", true)}>
+                      Steuergruppe {group.rate} im PDF ansehen
+                    </button>
+                  ))}
+                  {finding.id !== "net-summary" && sourceButton(draft.sourceLines, finding.evidenceIds)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <div className="review-grid">
         <PdfPreview
           pdf={pdf}
@@ -175,6 +261,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                   return (
                   <div
                     className={assigned.category === "unknown" ? "line-item line-item--unclassified" : "line-item"}
+                    id={"line-item-" + item.id}
                     key={item.id}
                   >
                     <div className="line-item-title">
@@ -208,6 +295,9 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                         {CATEGORY_IDS.map(id => <option key={id} value={id}>{CATEGORY_LABELS[id]}</option>)}
                       </select>
                     </label>
+                    {!item.taxRate && (
+                      <p className="position-review-note">Kein Steuersatz aus dem Original erkannt – hier prüfen.</p>
+                    )}
                     <p className="category-origin">
                       {assigned.source === "manual" ? "Manuell gewählt" :
                         assigned.source === "rule" ? "Regelbasierter Vorschlag" :
@@ -282,25 +372,6 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
               Kategorien ändern keine Steuersätze und stellen keine Steueraufteilung dar.
             </p>
           </section>
-          <section className="data-card" aria-labelledby="reconciliation-heading">
-            <h3 id="reconciliation-heading">Rechnerische Plausibilitätsprüfung</h3>
-            <p className="quiet">
-              Vergleicht ausschließlich explizit belegte Beträge und Steuersätze.
-              Die Kategorien werden nicht verwendet, um Steueranteile zu schätzen.
-            </p>
-            {findings.length === 0 ? (
-              <p className="total-check match">Keine rechnerischen Abweichungen in den prüfbaren Angaben gefunden.</p>
-            ) : (
-              <ul className="reconciliation-findings">
-                {findings.map(finding => (
-                  <li className={"reconciliation-" + finding.severity} key={finding.id}>
-                    <span>{finding.message}</span>
-                    {sourceButton(draft.sourceLines,finding.evidenceIds)}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
           <section className="data-card" aria-labelledby="tax-groups-heading">
             <h3 id="tax-groups-heading">Ausgewiesene Steuergruppen</h3>
             {draft.taxGroups.length === 0 ? <p className="quiet">Keine eindeutig ausgewiesenen Steuergruppen erkannt.</p> : (
@@ -333,6 +404,30 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
           </details>
         </div>
       </div>
+      {inspectedEvidence && (
+        <dialog
+          ref={inspectorRef}
+          className="evidence-dialog"
+          aria-label="Fundstelle im Originaldokument"
+          onClose={() => setInspectedEvidence(null)}
+        >
+          <div className="evidence-dialog-content">
+            <div className="evidence-dialog-toolbar">
+              <strong>Fundstelle im Original</strong>
+              <button type="button" onClick={() => setInspectedEvidence(null)}>
+                Zur Prüfung zurück
+              </button>
+            </div>
+            <PdfPreview
+              pdf={pdf}
+              pageNumber={page}
+              onPageChange={setPage}
+              evidence={draft.sourceLines}
+              activeEvidenceId={inspectedEvidence}
+            />
+          </div>
+        </dialog>
+      )}
     </section>
   );
 }
