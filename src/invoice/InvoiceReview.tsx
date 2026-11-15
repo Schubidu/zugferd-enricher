@@ -8,7 +8,6 @@ import { CATEGORY_IDS, CATEGORY_LABELS, CATEGORY_REVIEW_STATUS_LABELS, classifyD
 import type { Category, Classification } from "./classify";
 import { reconcileInvoice } from "./reconcile";
 import { summarizeCategories } from "./category-summary";
-import { modelErrorMessage } from "./model-errors";
 
 type Props = {
   pdf: PDFDocumentProxy;
@@ -19,24 +18,16 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
   const [page, setPage] = useState(1);
   const [activeEvidenceId, setActiveEvidenceId] = useState<string | null>(null);
   const [classifications, setClassifications] = useState<Record<string, Classification>>({});
-  const [classifying, setClassifying] = useState(false);
-  const [classificationError, setClassificationError] = useState<string | null>(null);
-  const classificationController = useRef<AbortController | null>(null);
   const inspectorRef = useRef<HTMLDialogElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const [inspectedEvidence, setInspectedEvidence] = useState<string | null>(null);
   // Every PDF object is a new classification scope, even if item IDs repeat.
   // This also runs when a parent replaces the PDF without unmounting this view.
   useEffect(() => {
-    classificationController.current?.abort();
-    classificationController.current = null;
     setClassifications({});
-    setClassifying(false);
-    setClassificationError(null);
     setPage(1);
     setActiveEvidenceId(null);
     setInspectedEvidence(null);
-    return () => classificationController.current?.abort();
   }, [pdf]);
   useEffect(() => {
     if (!inspectedEvidence) return;
@@ -50,31 +41,39 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
   }, [inspectedEvidence]);
   const positionSum = sumLineItemAmounts(draft.items);
   const categorySummary = summarizeCategories(draft.items, classifications);
-  const unclassifiedCount = categorySummary.find(group => group.category === "unknown")?.count ?? 0;
   const findings = reconcileInvoice(draft);
 
-  async function runClassification() {
-    classificationController.current?.abort();
+  // Description-only snapshot: changing tax or money must not restart inference.
+  const descriptionSnapshot = JSON.stringify(draft.items.map(({id, description}) => ({id, description})));
+  useEffect(() => {
+    const items = JSON.parse(descriptionSnapshot) as {id: string; description: string}[];
+    if (!items.some(item => classifyDescription(item.description).category === "unknown")) return;
     const controller = new AbortController();
-    classificationController.current = controller;
-    setClassifying(true);
-    setClassificationError(null);
-    try {
-      const { classifyLocally } = await import("./classify-client");
-      if (controller.signal.aborted) return;
-      const predicted = await classifyLocally(draft.items, controller.signal);
-      if (!controller.signal.aborted) {
-        setClassifications(previous => ({
-          ...predicted,
-          ...Object.fromEntries(Object.entries(previous).filter(([, entry]) => entry.source === "manual")),
-        }));
-      }
-    } catch (error) {
-      if (!controller.signal.aborted) setClassificationError(modelErrorMessage(error));
-    } finally {
-      if (!controller.signal.aborted) setClassifying(false);
-    }
-  }
+    // Avoid repeatedly starting the WASM Worker during a typing burst.
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const { classifyLocally } = await import("./classify-client");
+          if (controller.signal.aborted) return;
+          const predicted = await classifyLocally(items, controller.signal);
+          if (controller.signal.aborted) return;
+          setClassifications(previous => ({
+            ...predicted,
+            ...Object.fromEntries(Object.entries(previous).filter(
+              ([id, entry]) => entry.source === "manual" && items.some(item => item.id === id),
+            )),
+          }));
+        } catch {
+          // Optional model failure must never block invoice verification.
+          // Rule-based suggestions continue working without WebAssembly.
+        }
+      })();
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [pdf, descriptionSnapshot]);
 
   function setCategory(id: string, category: Category) {
     setClassifications(previous => ({
@@ -110,10 +109,6 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
   }
   function updateItem(id: string, key: "description" | "amount" | "taxRate", value: string) {
     if (key === "description") {
-      classificationController.current?.abort();
-      classificationController.current = null;
-      setClassifying(false);
-      setClassificationError(null);
       setClassifications(previous => {
         const next = {...previous};
         delete next[id];
@@ -232,39 +227,19 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
           </section>
           <section className="data-card" aria-labelledby="line-items-heading">
             <h3 id="line-items-heading">Rechnungspositionen</h3>
-            <div className="classification-action">
-              <button type="button" onClick={() => void runClassification()}
-                disabled={classifying || draft.items.length === 0}>
-                {classifying ? "Lokales Modell läuft…" : "Positionen lokal klassifizieren"}
-              </button>
-              <p className="quiet">
-                Vorschläge aus Regeln und optionalem fastText-WASM-Modell.
-                Keine Weitergabe deiner Rechnung; die Kategorie legt weder Steuer noch Betrag fest.
-              </p>
-              {classificationError && <p role="alert" className="error">{classificationError}</p>}
-            </div>
-            {unclassifiedCount > 0 && (
-              <p className="unclassified-summary">
-                {unclassifiedCount} {unclassifiedCount === 1 ? "Position benötigt" : "Positionen benötigen"} eine Kategorie.
-                Die betreffenden Positionen sind hervorgehoben.
-              </p>
-            )}
             {draft.items.length === 0 ? <p className="quiet">Keine eindeutig strukturierten Positionen erkannt. Bitte Original prüfen.</p> : (
               <div className="line-items">
                 {draft.items.map((item, index) => {
                   const assigned = classifications[item.id] ?? classifyDescription(item.description);
                   return (
                   <div
-                    className={assigned.category === "unknown" ? "line-item line-item--unclassified" : "line-item"}
+                    className="line-item"
                     id={"line-item-" + item.id}
                     key={item.id}
                   >
                     <div className="line-item-title">
                       <div className="line-item-heading">
                         <strong>Position {index + 1}</strong>
-                        {assigned.category === "unknown" && (
-                          <span className="category-review-label">Kategorie prüfen</span>
-                        )}
                       </div>
                       {sourceButton(draft.sourceLines,item.evidenceIds)}
                     </div>
