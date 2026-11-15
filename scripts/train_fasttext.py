@@ -88,7 +88,7 @@ def main() -> None:
         # Fixed order and single-thread training; no private invoice training data.
         train.write_text("\n".join(lines) + "\n", encoding="utf8")
         model = fasttext.train_supervised(
-            input=str(train), lr=0.5, epoch=35, dim=16, bucket=2000,
+            input=str(train), lr=0.05, epoch=25, dim=16, bucket=2000,
             minn=0, maxn=0, wordNgrams=2, minCount=1,
             loss="softmax", thread=1, verbose=0,
         )
