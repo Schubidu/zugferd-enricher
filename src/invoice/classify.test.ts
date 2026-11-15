@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyDescription, classifyItems } from "./classify";
+import { classifyDescription, classifyItems, getCategoryReviewStatus } from "./classify";
 import type { LineItem } from "./model";
 
 const examples: Array<[string,string]> = [
