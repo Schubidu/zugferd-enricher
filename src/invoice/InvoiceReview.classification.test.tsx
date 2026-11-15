@@ -18,10 +18,12 @@ const initial: InvoiceDraft = {
   }],
 };
 
+// Mirror App: editing a draft retains the same PDF instance.
+const harnessPdf = {numPages:1} as PDFDocumentProxy;
 function Harness() {
   const [draft, setDraft] = useState(initial);
   return <InvoiceReview
-    pdf={{numPages:1} as PDFDocumentProxy}
+    pdf={harnessPdf}
     draft={draft}
     onDraftChange={setDraft}
   />;
