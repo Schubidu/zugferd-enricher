@@ -28,7 +28,7 @@ function App() {
   }
 
   function handleInput(event: ChangeEvent<HTMLInputElement>) {
-    selectFile(event.currentTarget.files?.item(0) ?? null);
+    selectFile(event.currentTarget.files?.[0] ?? null);
   }
 
   function handleDrop(event: DragEvent<HTMLElement>) {
