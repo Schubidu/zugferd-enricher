@@ -78,7 +78,7 @@ describe("position sum in the browser invoice review", () => {
     const status = screen.getByRole("heading", {name:"Rechnerische Plausibilitätsprüfung"});
     const positions = screen.getByRole("heading", {name:"Rechnungspositionen"});
     expect(status.compareDocumentPosition(positions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText(/Position\\(en\\) ohne belegten Steuersatz/i)).toBeInTheDocument();
+    expect(screen.getByText(/Position\(en\) ohne belegten Steuersatz/i)).toBeInTheDocument();
     const missingTax = screen.getByRole("button", {name:"Position 7: Kurtaxe bearbeiten"});
     fireEvent.click(missingTax);
     expect(screen.getByRole("textbox", {name:"Position 7 Steuersatz"})).toHaveFocus();
