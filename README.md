@@ -21,7 +21,7 @@ Invoice files, file names, extracted data and model input **must stay in the bro
 
 Future OCR/classifier assets may be downloaded as public, versioned static files **on demand**, with local caching where feasible. Requests for application/model assets are not invoice uploads. The public repository uses synthetic test data only.
 
-The picker filters the filename and size (maximum 50 MB); PDF.js checks actual PDF readability after user action. Source lines retain page indexes and approximate bounding rectangles. The review UI shows detected candidates, allows manual correction, and checks explicitly listed net + tax = gross using exact cents. This is not full invoice/VAT validation; item amounts are never assumed to be net/gross and unspecified tax allocations are never invented.
+The picker filters the filename and size (maximum 50 MB); PDF.js checks actual PDF readability after user action. Source lines retain page indexes and approximate bounding rectangles. The review UI shows detected candidates, allows manual correction, and checks explicitly listed net + tax = gross using exact cents. This is not full invoice/VAT validation; item amounts are never assumed to be net/gross and unspecified tax allocations are never invented. The webapp separately displays the exact sum of **recognized line-item amounts** (including exempt city tax where itemized), recomputes after manual edits, and refuses to display a partial sum if any amount is invalid. This **does not establish completeness** and is **not automatically comparable** with the invoice gross total unless the amount basis is known.
 
 ## Development
 
