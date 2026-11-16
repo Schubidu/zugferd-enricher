@@ -1,7 +1,7 @@
 import { emptyFields, FIELD_LABELS } from "./model";
 import type { FieldKey, FieldValue, InvoiceDraft, LineItem, SourceLine, TaxGroup } from "./model";
 import { parseCents } from "./money";
-import { findSourceTaxEvidence, isTaxExplanationLine } from "./tax-evidence";
+import { findSourceTaxEvidence, findTaxStatementMentions, isTaxExplanationLine } from "./tax-evidence";
 
 // Capture entire spaced/thousands-grouped amounts, not a plausible numeric suffix.
 const money = /[-+]?(?:\d{1,3}(?:[., ]\d{3})+|\d+)[.,]\d{2}/.source;
@@ -85,11 +85,11 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
   // Text candidates are identified by a separate on-device model. Only
   // source wording and exact amount matching can validate a tax treatment.
   const noVatNotes = findSourceTaxEvidence(lines);
+  const allTaxStatements = findTaxStatementMentions(lines);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     if (consumed.has(line.id)) continue;
-    if (isTaxExplanationLine(line.text)) continue; // Never duplicate an explanation as a position.
     const group = groupPattern.exec(line.text);
     if (group && parseCents(group[2]!) !== null && parseCents(group[3]!) !== null) {
       taxGroups.push({ rate: group[1]! + "%", net: group[2]!, tax: group[3]!, evidenceIds: [line.id] });
@@ -137,8 +137,24 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
     });
   }
 
-  // An item is linked only when its label and amount uniquely agree with one
-  // separately printed, independently verified note. No tax rate is invented.
+  // Do not silently drop charge rows. An explanation is redundant only if
+  // a separate, uniquely matching printed position already accounts for it.
+  const textById = new Map(lines.map(line => [line.id, line.text]));
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index]!;
+    const sourceText = textById.get(item.evidenceIds[0] ?? "");
+    if (!sourceText || !isTaxExplanationLine(sourceText)) continue;
+    const statement = allTaxStatements.find(note => note.evidenceId === item.evidenceIds[0]);
+    if (!statement) continue;
+    const matches = items.filter(other =>
+      other.id !== item.id &&
+      other.description.toLocaleLowerCase("de-DE") === statement.label &&
+      parseCents(other.amount) === statement.amountCents);
+    if (matches.length === 1) items.splice(index, 1);
+  }
+
+  // A positive ML candidate is not sufficient: all competing source statements
+  // about this position (including those rejected by the model) must agree.
   for (const item of items) {
     if (item.taxRate !== null) continue;
     const sameItem = (candidate: LineItem) =>
@@ -147,7 +163,12 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
     const notes = noVatNotes.filter(note =>
       item.description.toLocaleLowerCase("de-DE") === note.label &&
       parseCents(item.amount) === note.amountCents);
-    if (notes.length !== 1 || items.filter(sameItem).length !== 1) continue;
+    const competing = allTaxStatements.filter(statement =>
+      statement.label === item.description.toLocaleLowerCase("de-DE") &&
+      statement.amountCents === parseCents(item.amount));
+    if (notes.length !== 1 || competing.length !== 1 ||
+      competing[0]!.evidenceId !== notes[0]!.evidenceId ||
+      items.filter(sameItem).length !== 1) continue;
     item.taxTreatment = {
       kind: "third_party_no_vat", origin: "pdf", evidenceIds: [notes[0]!.evidenceId],
     };
