@@ -4,7 +4,7 @@ import type { FieldKey, InvoiceDraft, SourceLine } from "./model";
 import { FIELD_KEYS, FIELD_LABELS, isSourceBackedNoVat } from "./model";
 import { formatEuroCents, sumLineItemAmounts } from "./money";
 import PdfPreview from "./PdfPreview";
-import { CATEGORY_IDS, CATEGORY_LABELS, CATEGORY_REVIEW_STATUS_LABELS, classifyDescription, getCategoryReviewStatus } from "./classify";
+import { CATEGORY_IDS, CATEGORY_LABELS, classifyDescription } from "./classify";
 import type { Category, Classification } from "./classify";
 import { reconcileInvoice } from "./reconcile";
 import { summarizeCategories } from "./category-summary";
@@ -42,6 +42,11 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
   const positionSum = sumLineItemAmounts(draft.items);
   const categorySummary = summarizeCategories(draft.items, classifications);
   const findings = reconcileInvoice(draft);
+  // These extraction warnings already have dedicated, actionable reconciliation tasks.
+  const extraWarnings = draft.warnings.filter(message =>
+    !message.startsWith("Mindestens eine Position hat keinen belegten Steuersatz") &&
+    !(message === "Kein eindeutig ausgewiesener Gesamtbetrag gefunden." &&
+      findings.some(finding => finding.id === "document-total")));
 
   // Description-only snapshot: changing tax or money must not restart inference.
   const descriptionSnapshot = JSON.stringify(draft.items.map(({id, description}) => ({id, description})));
@@ -125,16 +130,17 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
     // For two-line fields the value is on the last evidence line, not the label.
     const source = lines.find(line => line.id === ids.at(-1));
     return source ? (
-      <button className="evidence-link" type="button" onClick={() => focusEvidence(source.id, true)}>
-        Fundstelle S. {source.page} im PDF ansehen
+      <button className="evidence-link" type="button"
+        aria-label={"Fundstelle S. " + source.page + " im PDF ansehen"}
+        onClick={() => focusEvidence(source.id, true)}>
+        PDF · S. {source.page}
       </button>
     ) : null;
   }
   return (
     <section className="review-workspace" aria-label="Rechnung prüfen">
       <div className="review-intro">
-        <h2>Erkannte Rechnungsdaten</h2>
-        <p>Dies ist ein prüfbarer Entwurf, keine berichtigte Rechnung. Erkannte Daten sind Vorschläge; manuelle Korrekturen gelten nicht als durch das Original belegt.</p>
+        <h2>Rechnung prüfen</h2>
       </div>
       {findings.length > 0 && (
         <section className="review-findings" aria-labelledby="reconciliation-heading">
@@ -218,7 +224,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                       onChange={event => updateField(key, event.currentTarget.value)}
                     />
                     <div className="field-meta">
-                      <span>{field ? (field.origin === "manual" ? "Manuell geändert · nicht belegt" : "Aus PDF erkannt") : "Unbekannt"}</span>
+                      {field?.origin === "manual" && <span>Manuell geändert · nicht belegt</span>}
                       {sourceButton(draft.sourceLines, field?.evidenceIds ?? [])}
                     </div>
                   </div>
@@ -241,6 +247,8 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                     <div className="line-item-title">
                       <div className="line-item-heading">
                         <strong>Position {index + 1}</strong>
+                        {item.quantity && item.unitPrice &&
+                          <span className="line-item-meta">{item.quantity} × {item.unitPrice} €</span>}
                       </div>
                       {sourceButton(draft.sourceLines,item.evidenceIds)}
                     </div>
@@ -255,9 +263,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                       </label>
                       {isSourceBackedNoVat(item) ? (
                         <div className="source-tax-treatment">
-                          <strong>Steuerbehandlung laut Original</strong>
-                          <span>Ohne Umsatzsteuer (im Namen der Gemeinde)</span>
-                          <span>USt-Betrag: 0,00 € · aus dem Belegtext abgeleitet</span>
+                          <span>Im Namen der Gemeinde · ohne USt (0,00 €)</span>
                           {sourceButton(draft.sourceLines, item.taxTreatment!.evidenceIds)}
                           <button type="button" className="review-action"
                             onClick={() => updateItem(item.id, "taxRate", "")}>
@@ -279,20 +285,10 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                         {CATEGORY_IDS.map(id => <option key={id} value={id}>{CATEGORY_LABELS[id]}</option>)}
                       </select>
                     </label>
-                    {!item.taxRate && !isSourceBackedNoVat(item) && (
-                      <p className="position-review-note">Kein belegter Steuersatz oder Steuerstatus – hier prüfen.</p>
-                    )}
-                    <p className="category-origin">
-                      <strong>Kategoriestatus: {CATEGORY_REVIEW_STATUS_LABELS[getCategoryReviewStatus(assigned)]}</strong>
-                      {" · "}
-                      <span>{assigned.source === "manual" ? "Manuell gewählt" :
-                        assigned.source === "rule" ? "Regelbasierter Vorschlag" :
-                          assigned.source === "fasttext" ? "Lokaler fastText-Vorschlag · " +
-                            Math.round((assigned.confidence ?? 0)*100) + " % Modellwahrscheinlichkeit" :
-                            "Keine sichere Zuordnung"}</span>
-                    </p>
-                    {item.quantity && <p className="quiet">Menge: {item.quantity}{item.unitPrice ? " · Einzelpreis: " + item.unitPrice : ""}</p>}
-                    {item.origin === "manual" && <p className="manual-warning">Manuelle Änderung – mit Original abgleichen.</p>}
+                    {assigned.source === "manual" &&
+                      <span className="category-origin">Manuell gewählt</span>}
+                    {item.origin === "manual" &&
+                      <p className="manual-warning">Manuell geändert · mit Original vergleichen</p>}
                   </div>
                 );})}
               </div>
@@ -309,15 +305,11 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                   {positionSum.invalidCount} Betragsangabe(n) sind ungültig oder unvollständig.
                 </p>
               )}
-              <p className="quiet">
-                Summe aus {positionSum.itemCount} erkannten Positionen einschließlich manueller Änderungen.
-                Die Betragsbasis (netto/brutto) und Vollständigkeit sind nicht geprüft.
-                Deshalb ist dies kein automatischer Abgleich mit dem Rechnungsbetrag.
-              </p>
+              <p className="quiet">Kein automatischer Abgleich mit dem Rechnungsbetrag: Netto-/Bruttobasis nicht gesichert.</p>
             </div>
           </section>
-          <section className="data-card" aria-labelledby="category-summary-heading">
-            <h3 id="category-summary-heading">Kategorienübersicht</h3>
+          <details className="data-card category-overview">
+            <summary id="category-summary-heading">Kategorienübersicht</summary>
             {categorySummary.length === 0 ? (
               <p className="quiet">Noch keine Rechnungspositionen erkannt.</p>
             ) : (
@@ -351,15 +343,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                 </table>
               </div>
             )}
-            <p className="quiet">
-              Die Übersicht wird bei jeder Änderung von Kategorie oder Positionsbetrag automatisch aktualisiert.
-              „Unbekannt“ bleibt von „Sonstiges“ getrennt; „Sonstiges“ wird nur bewusst manuell
-              zugeordnet. Ein Vorschlag ist nicht bestätigt. Die Rechnungsprüfung oben ist
-              unabhängig von diesen Kategorien. Es werden nur erkannte Positionen addiert;
-              die Netto-/Brutto-Basis und Vollständigkeit sind nicht geprüft.
-              Kategorien ändern keine Steuersätze und werden nicht als ZUGFeRD-Klassifikationscodes verwendet.
-            </p>
-          </section>
+          </details>
           <section className="data-card" aria-labelledby="tax-groups-heading">
             <h3 id="tax-groups-heading" tabIndex={-1}>Ausgewiesene Steuergruppen</h3>
             {draft.taxGroups.length === 0 ? <p className="quiet">Keine eindeutig ausgewiesenen Steuergruppen erkannt.</p> : (
@@ -374,12 +358,11 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                 ))}
               </div>
             )}
-            <p className="quiet">Steuergruppen und Positionen werden nicht automatisch umverteilt oder als Brutto/Netto angenommen.</p>
           </section>
-          {draft.warnings.length > 0 && (
+          {extraWarnings.length > 0 && (
             <section className="data-card warnings" aria-labelledby="warnings-heading">
-              <h3 id="warnings-heading">Offene Punkte</h3>
-              <ul>{draft.warnings.map((text,index) => <li key={index}>{text}</li>)}</ul>
+              <h3 id="warnings-heading">Weitere Auffälligkeiten</h3>
+              <ul>{extraWarnings.map((text,index) => <li key={index}>{text}</li>)}</ul>
             </section>
           )}
           <details className="data-card raw-lines">
