@@ -148,4 +148,25 @@ describe("Issue #5 source-faithful export preflight", () => {
       expect.objectContaining({code:"LINE_AMOUNT_BASIS_UNVERIFIED"}),
     ]));
   });
+
+  it("clears only the amount-basis blocker for explicit PDF net-column evidence", () => {
+    const invoice = originalInvoice([
+      "Rechnungsaussteller: Nordlicht Digital GmbH",
+      "Rechnungsempfänger: Testkunde GmbH",
+      "Rechnungsnummer: ND-2026-001",
+      "Rechnungsdatum: 16.11.2026",
+      "LEISTUNG - MENGE x EINZELPREIS = NETTOBETRAG - UST",
+      "Beratungsleistung 2 x 80,00 160,00 19%",
+      "USt 19% Netto 160,00 Steuer 30,40",
+      "Nettosumme 160,00",
+      "Umsatzsteuer gesamt 30,40",
+      "Gesamtbetrag 190,40",
+    ]);
+    expect(invoice.items[0]?.amountBasis?.kind).toBe("net");
+    const report = assessExportPreflight(invoice, structuredClone(invoice));
+    expect(report.sourceAligned).toBe(true);
+    expect(report.blockers.map(blocker => blocker.code)).not.toContain("LINE_AMOUNT_BASIS_UNVERIFIED");
+    expect(report.exportAllowed).toBe(false); // independent validators remain missing
+  });
+
 });
