@@ -1,0 +1,304 @@
+import { describe, expect, it } from "vitest";
+import { writeFileSync } from "node:fs";
+import { recognizeInvoice } from "../invoice/recognize";
+import type { InvoiceDraft, SourceLine } from "../invoice/model";
+import { buildCiiCandidate } from "./cii-candidate";
+import { extractCiiSourceFacts } from "./cii-evidence";
+import { assessExportPreflight } from "./preflight";
+import { compareCiiXmlToSource } from "./xml-source-match";
+
+function invoice(lines: string[]): InvoiceDraft {
+  const source: SourceLine[] = lines.map((text, row) => ({
+    id: "pdf-" + row, page: 1, text,
+    box: {x:0.1, y:.025 * row, width:.7, height:.02},
+  }));
+  return recognizeInvoice(source, 1);
+}
+
+const originalLines = [
+  "Rechnungsaussteller: Haus & Söhne GmbH",
+  "Rechnungsempfänger: Kunde <Partner> UG",
+  "Rechnungsnummer: XML-2026-001",
+  "Rechnungsdatum: 15.11.2026",
+  "Leistungsdatum: 15.11.2026",
+  "Fälligkeitsdatum: 29.11.2026",
+  "Rechnungswährung: EUR",
+  "Rechnungstypcode: 380",
+  "Aussteller Straße: Uferweg & Ring 12",
+  "Aussteller PLZ: 12345",
+  "Aussteller Ort: Berlin",
+  "Aussteller Ländercode: DE",
+  "Aussteller USt-ID: DE123456789",
+  "Empfänger Straße: Marktstraße 1",
+  "Empfänger PLZ: 54321",
+  "Empfänger Ort: Bremen",
+  "Empfänger Ländercode: DE",
+  "LEISTUNG - MENGE x EINZELPREIS = NETTOBETRAG - UST",
+  "Beratungsleistung & Audit 2 x 80,00 160,00 19%",
+  "Position 1 USt-Kategorie: S | Position: Beratungsleistung & Audit | Betrag: 160,00",
+  "Position 1 Einheit: C62 | Position: Beratungsleistung & Audit | Betrag: 160,00",
+  "USt 19% Netto 160,00 Steuer 30,40",
+  "Nettosumme 160,00",
+  "Umsatzsteuer gesamt 30,40",
+  "Gesamtbetrag 190,40",
+  "Zahlbetrag: 190,40",
+];
+
+function candidate(lines = originalLines, reviewed?: InvoiceDraft) {
+  const original = invoice(lines);
+  return buildCiiCandidate(original, reviewed ?? structuredClone(original));
+}
+
+describe("EN16931 internal CII XML preparation (never a certified export)", () => {
+  it("requires explicit PDF source evidence and escapes XML special characters", () => {
+    const original = invoice(originalLines);
+    expect(original.items).toHaveLength(1);
+    expect(original.items[0]?.description).toBe("Beratungsleistung & Audit");
+    const facts = extractCiiSourceFacts(original);
+    expect(facts.ok).toBe(true);
+    const preflight = assessExportPreflight(original, structuredClone(original));
+    expect(preflight.exportAllowed).toBe(false);
+    const codes = preflight.blockers.map(blocker => blocker.code);
+    expect(codes).not.toContain("CURRENCY_UNVERIFIED");
+    expect(codes).not.toContain("PARTY_ADDRESSES_UNVERIFIED");
+    expect(codes).not.toContain("INVOICE_TYPE_UNVERIFIED");
+    expect(codes).not.toContain("SELLER_TAX_IDENTIFIER_UNVERIFIED");
+    expect(codes).not.toContain("PAYABLE_AMOUNT_UNVERIFIED");
+    expect(codes).not.toContain("LINE_VAT_CATEGORY_UNVERIFIED");
+    expect(codes).toContain("SOURCE_LINE_COVERAGE_UNVERIFIED");
+    expect(codes).toContain("XML_SCHEMA_VALIDATION_PENDING");
+    expect(codes).toContain("PDFA3_VALIDATION_PENDING");
+
+    const result = buildCiiCandidate(original, structuredClone(original));
+    expect(result.status).toBe("unvalidated");
+    if (result.status !== "unvalidated") return;
+    expect(result.profile).toBe("EN16931");
+    const sourceMatch = compareCiiXmlToSource(result.xml, original);
+    expect(sourceMatch.status).toBe("matched-subset");
+    if (sourceMatch.status === "matched-subset") expect(sourceMatch.checks).toBeGreaterThan(30);
+    // Only the purpose-built synthetic invoice may leave Vitest for the CI
+    // validator; no uploaded document or user's review is ever serialized.
+    if (process.env.CII_VALIDATION_OUTPUT) {
+      writeFileSync(process.env.CII_VALIDATION_OUTPUT, result.xml, {encoding:"utf8", flag:"wx"});
+    }
+    expect(result.xml).toContain("urn:cen.eu:en16931:2017");
+    expect(result.xml).toContain("<ram:ID>XML-2026-001</ram:ID>");
+    expect(result.xml).toContain("<ram:Name>Haus &amp; Söhne GmbH</ram:Name>");
+    expect(result.xml).toContain("<ram:Name>Kunde &lt;Partner&gt; UG</ram:Name>");
+    expect(result.xml).toContain("<ram:LineOne>Uferweg &amp; Ring 12</ram:LineOne>");
+    expect(result.xml).toContain("<ram:Name>Beratungsleistung &amp; Audit</ram:Name>");
+    expect(result.xml).toContain('<ram:BilledQuantity unitCode="C62">2</ram:BilledQuantity>');
+    expect(result.xml).toContain("<ram:CategoryCode>S</ram:CategoryCode>");
+    expect(result.xml).toContain("<ram:RateApplicablePercent>19.00</ram:RateApplicablePercent>");
+    expect(result.xml).toContain("<ram:LineTotalAmount>160.00</ram:LineTotalAmount>");
+    expect(result.xml).toContain("<ram:TaxBasisTotalAmount>160.00</ram:TaxBasisTotalAmount>");
+    expect(result.xml).toContain('<ram:TaxTotalAmount currencyID="EUR">30.40</ram:TaxTotalAmount>');
+    expect(result.xml).toContain("<ram:GrandTotalAmount>190.40</ram:GrandTotalAmount>");
+    expect(result.xml).toContain("<ram:DuePayableAmount>190.40</ram:DuePayableAmount>");
+    expect(result.xml).toContain('format="102">20261115</udt:DateTimeString>');
+    expect(result.xml).toContain("<ram:ActualDeliverySupplyChainEvent>");
+    const parsed = new DOMParser().parseFromString(result.xml, "application/xml");
+    expect(parsed.querySelector("parsererror")).toBeNull();
+    expect(parsed.documentElement.localName).toBe("CrossIndustryInvoice");
+    expect(parsed.getElementsByTagName("ram:IncludedSupplyChainTradeLineItem")).toHaveLength(1);
+  });
+
+  it("keeps all five original synthetic invoices blocked with missing EN16931 source data", () => {
+    const lines = [
+      "Rechnungsaussteller: Nordlicht Digital GmbH",
+      "Rechnungsempfänger: Beispiel Büroservice UG",
+      "Rechnungsnummer: ND-2026-001",
+      "Rechnungsdatum: 15.11.2026",
+      "LEISTUNG / ARTIKEL - MENGE x EINZELPREIS = NETTOBETRAG - UST",
+      "Beratungsleistung 2 x 80,00 160,00 19%",
+      "USt 19% Netto 160,00 Steuer 30,40",
+      "Nettosumme 160,00",
+      "Umsatzsteuer gesamt 30,40",
+      "Gesamtbetrag 190,40",
+    ];
+    const result = candidate(lines);
+    expect(result.status).toBe("blocked");
+    if (result.status !== "blocked") return;
+    expect(result.reasons).toContain("EVIDENCE:currency");
+    expect(result.reasons).toContain("EVIDENCE:typeCode");
+    expect(result.reasons).toContain("EVIDENCE:sellerStreet");
+    expect(result.reasons).toContain("EVIDENCE:items.0.vatCategory");
+    expect(result.reasons).toContain("EVIDENCE:payable");
+  });
+
+  it("rejects an explicitly different currency/type and conflicting duplicate claims", () => {
+    for (const changes of [
+      originalLines.map(l => l === "Rechnungswährung: EUR" ? "Rechnungswährung: USD" : l),
+      originalLines.map(l => l === "Rechnungstypcode: 380" ? "Rechnungstypcode: 381" : l),
+      [...originalLines, "Rechnungswährung: EUR"],
+    ]) {
+      expect(candidate(changes).status).toBe("blocked");
+    }
+  });
+
+  it("rejects a VAT category missing its exact source-item description or amount", () => {
+    const altered = originalLines.map(l => l.startsWith("Position 1 USt-Kategorie:")
+      ? "Position 1 USt-Kategorie: S | Position: Andere Leistung | Betrag: 160,00" : l);
+    const result = candidate(altered);
+    expect(result.status).toBe("blocked");
+    if (result.status !== "blocked") return;
+    expect(result.reasons).toContain("EVIDENCE:items.0.vatCategory");
+  });
+
+  it("does not turn the tax percentage or a source-backed municipal tax into a category S", () => {
+    const none = originalLines.filter(l => !l.startsWith("Position 1 USt-Kategorie:"));
+    expect(candidate(none).status).toBe("blocked");
+
+    const municipal = invoice([
+      ...originalLines.filter(l => !l.startsWith("Position 1 USt-Kategorie:")),
+      "Kurtaxe 1 x 3,50 3,50",
+      "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 3,50",
+    ]);
+    expect(buildCiiCandidate(municipal, structuredClone(municipal)).status).toBe("blocked");
+  });
+
+  it("blocks manual changes, including unchanged-looking values with manual provenance", () => {
+    const original = invoice(originalLines);
+    const reviewed = structuredClone(original);
+    reviewed.fields.netTotal = {...reviewed.fields.netTotal!, origin:"manual"};
+    const result = buildCiiCandidate(original,reviewed);
+    expect(result.status).toBe("blocked");
+    if (result.status !== "blocked") return;
+    expect(result.reasons).toContain("SOURCE_FIELD_CHANGED:fields.netTotal");
+  });
+
+  it("blocks fabricated payable amounts and contradictory arithmetic", () => {
+    const payable = originalLines.map(l =>
+      l === "Zahlbetrag: 190,40" ? "Zahlbetrag: 180,40" : l);
+    const payableResult = candidate(payable);
+    expect(payableResult.status).toBe("blocked");
+    if (payableResult.status === "blocked") expect(payableResult.reasons).toContain("AMOUNTS:payable");
+
+    const groupTax = originalLines.map(l =>
+      l === "USt 19% Netto 160,00 Steuer 30,40" ?
+        "USt 19% Netto 160,00 Steuer 30,39" : l);
+    expect(candidate(groupTax).status).toBe("blocked");
+  });
+
+  it("blocks unsupported quantity, ambiguous addresses and illegal XML characters", () => {
+    const noQty = originalLines.map(l => l.startsWith("Beratungsleistung & Audit ") ?
+      "Beratungsleistung & Audit 160,00 19%" : l);
+    expect(candidate(noQty).status).toBe("blocked");
+    expect(candidate([...originalLines,"Aussteller PLZ: 12345"]).status).toBe("blocked");
+    const invalid = originalLines.map(l => l === "Rechnungsaussteller: Haus & Söhne GmbH" ?
+      "Rechnungsaussteller: Haus \u0001 GmbH" : l);
+    const result = candidate(invalid);
+    expect(result.status).toBe("blocked");
+    if (result.status === "blocked") expect(result.reasons).toContain("XML:illegal-source-character");
+  });
+
+  it("creates separate standard-rate VAT groups using exact integer arithmetic", () => {
+    const source = originalLines.flatMap(line => {
+      if (line === "USt 19% Netto 160,00 Steuer 30,40") return [
+        "Parken 1 x 10,00 10,00 7%",
+        "Position 2 USt-Kategorie: S | Position: Parken | Betrag: 10,00",
+        "Position 2 Einheit: C62 | Position: Parken | Betrag: 10,00",
+        "USt 19% Netto 160,00 Steuer 30,40",
+        "USt 7% Netto 10,00 Steuer 0,70",
+      ];
+      if (line === "Nettosumme 160,00") return ["Nettosumme 170,00"];
+      if (line === "Umsatzsteuer gesamt 30,40") return ["Umsatzsteuer gesamt 31,10"];
+      if (line === "Gesamtbetrag 190,40") return ["Gesamtbetrag 201,10"];
+      if (line === "Zahlbetrag: 190,40") return ["Zahlbetrag: 201,10"];
+      return [line];
+    });
+    const result = candidate(source);
+    expect(result.status).toBe("unvalidated");
+    if (result.status !== "unvalidated") return;
+    expect(result.xml.match(/<ram:IncludedSupplyChainTradeLineItem>/g)).toHaveLength(2);
+    expect(result.xml.match(/<ram:CalculatedAmount>/g)).toHaveLength(2);
+    expect(result.xml).toContain("<ram:TaxBasisTotalAmount>170.00</ram:TaxBasisTotalAmount>");
+    expect(result.xml).toContain("<ram:GrandTotalAmount>201.10</ram:GrandTotalAmount>");
+  });
+
+  it("blocks missing or ambiguous delivery dates instead of inserting an empty CII element", () => {
+    const missing = originalLines.filter(line => !line.startsWith("Leistungsdatum:"));
+    const result = candidate(missing);
+    expect(result.status).toBe("blocked");
+    if (result.status === "blocked") expect(result.reasons).toContain("EVIDENCE:deliveryDate");
+
+    expect(candidate([...originalLines,"Leistungsdatum: 15.11.2026"]).status).toBe("blocked");
+    const invalid = originalLines.map(line => line === "Leistungsdatum: 15.11.2026" ?
+      "Leistungsdatum: 31.02.2026" : line);
+    const malformed = candidate(invalid);
+    expect(malformed.status).toBe("blocked");
+    if (malformed.status === "blocked") expect(malformed.reasons).toContain("EVIDENCE:deliveryDate");
+  });
+
+  it("refuses schema-plausible but source-unfaithful values after XML serialization", () => {
+    const source = invoice(originalLines);
+    const candidateResult = buildCiiCandidate(source, structuredClone(source));
+    expect(candidateResult.status).toBe("unvalidated");
+    if (candidateResult.status !== "unvalidated") return;
+    const xml = candidateResult.xml;
+
+    const corruptions = [
+      [/<ram:Name>Haus &amp; Söhne GmbH<\/ram:Name>/,
+        "<ram:Name>Anderer Aussteller GmbH</ram:Name>", "Seller.name"],
+      [/<ram:Name>Kunde &lt;Partner&gt; UG<\/ram:Name>/,
+        "<ram:Name>Fremder Empfänger UG</ram:Name>", "Buyer.name"],
+      [/<ram:LineOne>Uferweg &amp; Ring 12<\/ram:LineOne>/,
+        "<ram:LineOne>Falsche Straße 5</ram:LineOne>", "Seller.street"],
+      [/<ram:GrandTotalAmount>190\.40<\/ram:GrandTotalAmount>/,
+        "<ram:GrandTotalAmount>190.41</ram:GrandTotalAmount>", "grossTotal"],
+      [/<ram:CategoryCode>S<\/ram:CategoryCode>/,
+        "<ram:CategoryCode>Z</ram:CategoryCode>", "lines.0.vatCategory"],
+      [/<ram:BilledQuantity unitCode="C62">2<\/ram:BilledQuantity>/,
+        '<ram:BilledQuantity unitCode="C62">3</ram:BilledQuantity>', "lines.0.quantity"],
+      [/<ram:LineTotalAmount>160\.00<\/ram:LineTotalAmount>/,
+        "<ram:LineTotalAmount>150.00</ram:LineTotalAmount>", "lines.0.amount"],
+      [/<ram:InvoiceCurrencyCode>EUR<\/ram:InvoiceCurrencyCode>/,
+        "<ram:InvoiceCurrencyCode>USD</ram:InvoiceCurrencyCode>", "currency"],
+    ] as const;
+
+    for (const [from,to,expected] of corruptions) {
+      expect(xml).toMatch(from);
+      const mismatch = compareCiiXmlToSource(xml.replace(from,to),source);
+      expect(mismatch.status).toBe("mismatch");
+      if (mismatch.status === "mismatch") {
+        expect(mismatch.reasons).toContain(expected);
+      }
+    }
+  });
+
+  it("rejects structural XML tampering, duplicate lines and unsafe declarations locally", () => {
+    const source = invoice(originalLines);
+    const result = buildCiiCandidate(source, structuredClone(source));
+    expect(result.status).toBe("unvalidated");
+    if (result.status !== "unvalidated") return;
+
+    const corruptedLine = result.xml.replace(
+      "</rsm:SupplyChainTradeTransaction>",
+      result.xml.match(/<ram:IncludedSupplyChainTradeLineItem>[\s\S]*?<\/ram:IncludedSupplyChainTradeLineItem>/)?.[0] +
+        "</rsm:SupplyChainTradeTransaction>",
+    );
+    const duplicate = compareCiiXmlToSource(corruptedLine,source);
+    expect(duplicate.status).toBe("mismatch");
+    if (duplicate.status === "mismatch") expect(duplicate.reasons).toContain("lines.count");
+
+    const invalid = compareCiiXmlToSource("<not-xml",source);
+    expect(invalid).toMatchObject({status:"mismatch",reasons:["INVALID_CII_XML"]});
+    const dtd = compareCiiXmlToSource(
+      '<!DOCTYPE invoice [<!ENTITY x "unsafe">]>' + result.xml,
+      source,
+    );
+    expect(dtd).toMatchObject({status:"mismatch",reasons:["UNSAFE_XML"]});
+  });
+
+  it("cannot compare XML to an incomplete or ambiguous source snapshot", () => {
+    const source = invoice(originalLines);
+    const result = buildCiiCandidate(source, structuredClone(source));
+    expect(result.status).toBe("unvalidated");
+    if (result.status !== "unvalidated") return;
+    const changed = invoice(originalLines.filter(line => !line.startsWith("Rechnungswährung:")));
+    expect(compareCiiXmlToSource(result.xml,changed)).toMatchObject({
+      status:"mismatch",reasons:["SOURCE_EVIDENCE_INCOMPLETE"],
+    });
+  });
+
+});

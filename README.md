@@ -2,7 +2,7 @@
 
 Local-first, privacy-friendly tool to analyze, validate, and enrich existing PDF invoices with ZUGFeRD data.
 
-> **Project stage – Issue #3:** Text-based PDFs are read locally with PDF.js. Basic classification suggestions and source-backed arithmetic checks are available. OCR, complete tax validation and ZUGFeRD export are not implemented.
+> **Project stage – Issue #5 (export foundation):** Text PDFs are read locally; classification and source-backed arithmetic checks are available. The [source-fidelity export preflight](docs/export-gates.md) is under development and **always blocks output** until the missing EN 16931 source facts and independent XML/PDF/A-3 validators are implemented. OCR and ZUGFeRD export are not yet available.
 
 ## What this project will do
 
@@ -21,7 +21,7 @@ Invoice files, file names, extracted data and model input **must stay in the bro
 
 Future OCR/classifier assets may be downloaded as public, versioned static files **on demand**, with local caching where feasible. Requests for application/model assets are not invoice uploads. The public repository uses synthetic test data only.
 
-The picker filters the filename and size (maximum 50 MB); PDF.js checks actual PDF readability after user action. Source lines retain page indexes and approximate bounding rectangles. The review UI shows detected candidates, allows manual correction, and checks explicitly listed net + tax = gross using exact cents. This is not full invoice/VAT validation; item amounts are never assumed to be net/gross and unspecified tax allocations are never invented. The webapp separately displays the exact sum of **recognized line-item amounts** (including separately itemized city tax), recomputes after manual edits, and refuses to display a partial sum if any amount is invalid. This **does not establish completeness** and is **not automatically comparable** with the invoice gross total unless the amount basis is known.
+The picker filters the filename and size (maximum 50 MB); PDF.js checks actual PDF readability after user action. Source lines retain page indexes and approximate bounding rectangles. The review UI shows detected candidates, allows manual correction, and checks explicitly listed net + tax = gross using exact cents. This is not full invoice/VAT validation; a line amount is treated as net only when its own PDF page has an explicit matching net column heading. Otherwise its basis remains unknown. No tax allocation is invented. The webapp separately displays the exact sum of **recognized line-item amounts** (including separately itemized city tax), recomputes after manual edits, and refuses to display a partial sum if any amount is invalid. This **does not establish completeness** and is **not automatically comparable** with the invoice gross total unless the amount basis is known.
 
 ## Development
 
@@ -71,7 +71,7 @@ MIT (see LICENSE). Future model weights, WASM runtimes, XML schemas and conforma
 - Browser-only PDF.js display and parsing. No invoice URL, document upload, analytics, or model-based extraction.
 - Positions are approximate page-relative rectangles derived from PDF.js text fragments; unusual layouts (columns, tables, overlapping text, rotated text) may produce incorrect line grouping. The user can always inspect original source text and correct fields. Highlighted text is evidence of the *original extraction*, not proof of a manual edit.
 - Labels are deliberately conservative: issuer/recipient are populated only when explicitly labeled; dates accept ISO, German dotted dates, or English month-name dates. Ambiguous numerical slash dates are never guessed. The basic regex reader supports a subset of line-item layouts and tax tables, not arbitrary invoice templates.
-- A row's amount has an **unknown basis** (net/gross). Only explicitly printed amounts/rates are shown; the app does not calculate unstated VAT or split packages.
+- A line amount is **source-backed net** only if the printed column heading identifies the amount as net, on the same PDF page. A gross or unidentified heading does not inherit this evidence. No unstated VAT or mixed-rate package split is inferred.
 - Scans and image-only PDFs show an OCR-needed warning (planned separately in issue #4).
 - The source PDF is unchanged; the parsed PDF worker/document is released when the user changes or removes the file. No export/rewriting is performed.
 - Security boundaries: no PDF scripts are executed for invoice logic; PDF.js text worker runs locally, with evaluation disabled. Inspect the network panel to verify only the app's static assets load.
@@ -90,7 +90,7 @@ MIT (see LICENSE). Future model weights, WASM runtimes, XML schemas and conforma
 - Tax-evidence identification now runs a **separate tiny on-device Bernoulli Naive Bayes model**, trained only on fixed synthetic positive/negative invoice lines. It examines retained PDF source lines and proposes **candidate evidence lines**, not amounts, tax rates, tax statuses or ZUGFeRD codes. The deterministic gate requires an explicit third-party authority, an explicit no-VAT statement and an exact unique label/amount match with the invoice position. Conflicts, ambiguities and model mistakes cause abstention. This is an intentionally narrow first iteration, not a general-purpose semantic invoice model or measured accuracy on real supplier PDFs.
 - TEST-05: The explicitly printed "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer)" statement is found in the source-line candidate model and linked to exactly one matching Kurtaxe position. Other wording, such as "Ortstaxe im Namen der Stadt, keine Mehrwertsteuer", is accepted only after the same source checks. This is a source-backed tax treatment, **not 0% VAT** and **not** a ready-made EN 16931 / ZUGFeRD category code. The printed statement is never a second line item, and the net/VAT/gross reconciliation includes source-verified pass-through amounts. Without an unambiguous matching statement, tax treatment remains unresolved. Editing the invoice position invalidates the source-linked treatment.
 - A manual category selection does **not** change tax rates, tax groups, original descriptions, amounts or provenance. Any edited description invalidates its previous classifier suggestion.
-- A separate deterministic check compares **printed** net + VAT against gross, **printed** tax-group net × printed rate against printed tax (1-cent tolerance for ordinary rounding), and printed quantity × printed unit-price against printed line total. Unstated VAT allocations and mixed-rate package splits are never invented. Tax-group coverage gaps are flagged for review rather than automatically classified as invoice errors.
+- A separate deterministic check compares **printed** net + VAT against gross, **printed** tax-group net × printed rate against printed tax (1-cent tolerance for ordinary rounding), printed quantity × printed unit-price against printed line total, and (only when all amounts are explicitly net) recognized net line totals against the printed net invoice total. Unstated VAT allocations and mixed-rate package splits are never invented. Tax-group coverage gaps are flagged for review rather than automatically classified as invoice errors.
 - No large OCR or VLM download is needed to read born-digital PDFs. An invoice can be opened and checked without loading fastText at all. Training/model downloads are independent of normal file selection.
 - The current parser still handles only a subset of invoice layouts and cannot establish that every item was recognized. Invoices with missing or conflicting fields must be reviewed manually before any future export.
 - Original PDF fundstellen are displayed with a translucent yellow **text-marker overlay** using CSS `mix-blend-mode: multiply` without modifying the original. The PDF inspector uses scrollport-relative positions to bring the exact source line into view, including on narrow screens.
@@ -112,3 +112,14 @@ The review screen summarizes **recognized** invoice line amounts by category, in
 - Check the `.ftz`, `fasttext-rust-v1.wasm` and module Worker files for HTTP 200 and correct MIME types. The old Emscripten `.mjs` loader is no longer required. A successful WebKit desktop test does not replace an actual iPhone/iOS 27 acceptance test.
 - Safari's Lockdown Mode can restrict complex web technologies; if WebAssembly is unavailable, the app must preserve rule-based category suggestions. Test on an **actual iPhone with iOS 27** before declaring this hardware issue resolved.
 - iOS 27's performance regression for plain-HTTP LAN dev servers does not apply to our HTTPS Cloudflare preview. No need for cross-origin isolation or threads for this small single-threaded model.
+
+### Five synthetic PDF test documents
+
+- TEST-01, TEST-02, TEST-03, and TEST-05: their printed positions, tax groups and totals should produce **no reconciliation findings** when read correctly. Their explicit net column headers are retained as source-backed amount-basis evidence.
+- TEST-04: one **intentional** review need remains: `Business Paket` has no printed line-level VAT rate. Never infer a rate by subtracting tax groups. This is not a broken invoice total.
+- None of these documents includes complete postal addresses or every required EN 16931 fact. **Successful invoice analysis does not mean ZUGFeRD export eligibility**.
+- `src/invoice/test-documents.regression.test.ts` uses invoice-relevant text transcribed from the original five PDFs; `src/invoice/pdf.test.ts` also exercises the PDF.js pipeline using fresh synthetic test PDFs. These do not replace end-to-end extraction with the five original PDF bytes.
+
+### Review UI
+
+The default view focuses on source fields, invoice positions and actionable discrepancies. Optional category totals and export readiness are behind native disclosures. The exporter remains unavailable until conformance and full source-fidelity checks are complete.

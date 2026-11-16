@@ -14,6 +14,9 @@ const groupPattern = new RegExp(
   money + ")\\s+(?:Steuer|MwSt|VAT|Tax)\\s*[:=]?\\s*(" + money + ")\\s*$", "i",
 );
 const taxSummary = /^\s*(?:(?:USt|MwSt|VAT|Tax)(?:\s+\d{1,2}\s*%)?|Umsatzsteuer(?:\s+\d{1,2}\s*%)?)\s*(?:[:=]|\s|$)/i;
+// Source rows under this printed heading are explicitly net-priced.
+// This is deliberately NOT inferred from a 7%/19% tax rate.
+const netItemHeading = /\bMENGE\s*[x×]\s*EINZELPREIS\s*=\s*(?:NETTOBETRAG|POSITION\s+NETTO)\b/i;
 
 function validDate(value: string): boolean {
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -86,9 +89,23 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
   // source wording and exact amount matching can validate a tax treatment.
   const noVatNotes = findSourceTaxEvidence(lines);
   const allTaxStatements = findTaxStatementMentions(lines);
+  let lastPage = 0;
+  let netHeading: SourceLine | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
+    if (line.page !== lastPage) {
+      lastPage = line.page;
+      netHeading = null; // Do not carry a heading into another PDF page.
+    }
+    if (/\bMENGE\s*[x×]\s*EINZELPREIS\s*=/i.test(line.text)) {
+      // A new unknown/gross-priced table invalidates an earlier net heading.
+      netHeading = netItemHeading.test(line.text) ? line : null;
+      continue;
+    }
+    if (/^\s*(?:STEUERÜBERSICHT|POSITIONSSUMME|STEUERAUSWEIS|Zwischensumme|Tax\s+summary)\b/i.test(line.text)) {
+      netHeading = null;
+    }
     if (consumed.has(line.id)) continue;
     const group = groupPattern.exec(line.text);
     if (group && parseCents(group[2]!) !== null && parseCents(group[3]!) !== null) {
@@ -119,6 +136,10 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
       break;
     }
     if (isLabel) continue;
+    // Evidence-only metadata and already printed payable sums are not charges.
+    // They must never be counted as separate invoice positions in CII preparation.
+    if (/^\s*(?:Position\s+\d+\s+(?:USt-Kategorie|Einheit)|Zahlbetrag)\s*:/i.test(line.text))
+      continue;
     // Explicit invoice tax totals were handled above; exclude remaining tax summaries from positions.
     if (taxSummary.test(line.text)) continue;
 
@@ -133,6 +154,7 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
       description: match[1]!.trim(), quantity: match[2] ?? null,
       unitPrice: match[3] ?? null, amount: match[4]!,
       taxRate: match[5] ? match[5] + "%" : null,
+      ...(netHeading ? {amountBasis: {kind: "net" as const, origin: "pdf" as const, evidenceIds: [netHeading.id]}} : {}),
       evidenceIds: [line.id], origin: "pdf",
     });
   }

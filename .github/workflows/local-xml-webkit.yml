@@ -1,0 +1,55 @@
+name: Offline browser XML validation - WebKit smoke
+
+on:
+  pull_request:
+    paths:
+      - "src/export/**"
+      - "scripts/smoke-local-xml-webkit.mjs"
+      - ".github/workflows/local-xml-webkit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  webkit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Create only a synthetic XML candidate
+        run: |
+          set -euo pipefail
+          CII_VALIDATION_OUTPUT="$RUNNER_TEMP/synthetic-cii.xml" npm run test -- src/export/cii-candidate.test.ts
+          test -s "$RUNNER_TEMP/synthetic-cii.xml"
+      - name: Install isolated WebKit driver for the smoke test
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.65.1
+          npx playwright install --with-deps webkit
+      - name: Build CI-only entry with the actual production worker bundle
+        run: |
+          set -euo pipefail
+          VITE_VALIDATOR_SMOKE=1 VALIDATOR_WEBKIT_SMOKE=1 npm run build
+          test -s dist/validation-smoke.html
+          test -s dist/index.html
+      - name: Test browser-local XSD and Schematron against valid and tampered invoice
+        run: |
+          set -euo pipefail
+          npm run preview -- --host 127.0.0.1 --port 5173 --strictPort > "$RUNNER_TEMP/vite.log" 2>&1 &
+          VITE_PID="$!"
+          trap 'kill "$VITE_PID" || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:5173/validation-smoke.html >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:5173/validation-smoke.html >/dev/null
+          if ! node scripts/smoke-local-xml-webkit.mjs "$RUNNER_TEMP/synthetic-cii.xml"; then
+            cat "$RUNNER_TEMP/vite.log"
+            exit 1
+          fi

@@ -126,7 +126,7 @@ describe("position sum in the browser invoice review", () => {
 
   it("shows category totals and reassigns an amount immediately when a category changes", () => {
     render(<Harness />);
-    const table = screen.getByRole("table");
+    const table = screen.getByRole("table",{hidden:true});
     expect(table).toHaveTextContent("Unbekannt");
     expect(table).toHaveTextContent("6");
     expect(table).toHaveTextContent("421,00 €");
@@ -146,7 +146,7 @@ describe("position sum in the browser invoice review", () => {
 
   it("updates the category amount sum immediately after editing a position", () => {
     render(<Harness />);
-    const table = screen.getByRole("table");
+    const table = screen.getByRole("table",{hidden:true});
     fireEvent.change(screen.getByRole("textbox", {name:"Position 1 Betrag"}), {
       target:{value:"106,00"},
     });
@@ -159,7 +159,7 @@ describe("position sum in the browser invoice review", () => {
     fireEvent.change(screen.getByRole("textbox", {name:"Position 2 Betrag"}), {
       target:{value:"invalid"},
     });
-    const table = screen.getByRole("table");
+    const table = screen.getByRole("table",{hidden:true});
     expect(table).toHaveTextContent("Nicht berechenbar");
     expect(table).toHaveTextContent("1 ungültige Betragsangabe(n)");
     expect(table).toHaveTextContent("10,50 €");
@@ -175,11 +175,11 @@ describe("position sum in the browser invoice review", () => {
     fireEvent.change(screen.getByRole("combobox",{name:"Position 1 Kategorie"}), {
       target:{value:"accommodation"},
     });
-    expect(first).toHaveTextContent("Kategoriestatus: Manuell zugeordnet");
+    expect(first).toHaveTextContent("Manuell gewählt");
     fireEvent.change(screen.getByRole("combobox",{name:"Position 1 Kategorie"}), {
       target:{value:"unknown"},
     });
-    expect(first).toHaveTextContent("Kategoriestatus: Unbekannt");
+    expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("unknown");
     expect(screen.queryByText(/Positionen benötigen eine Kategorie/)).not.toBeInTheDocument();
   });
 
@@ -190,7 +190,7 @@ describe("position sum in the browser invoice review", () => {
       target:{value:"Konferenzlunch"},
     });
     expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("food");
-    expect(screen.getByRole("table")).toHaveTextContent("Speisen / Frühstück");
+    expect(screen.getByRole("table",{hidden:true})).toHaveTextContent("Speisen / Frühstück");
   });
 
   it("manual category changes do not modify extracted tax rates or amounts", () => {
@@ -228,21 +228,21 @@ describe("position sum in the browser invoice review", () => {
     render(<Harness />);
     const first = screen.getByText("Position 1").closest(".line-item");
     const last = screen.getByText("Position 7").closest(".line-item");
-    expect(first).toHaveTextContent("Kategoriestatus: Unbekannt");
-    expect(last).toHaveTextContent("Kategoriestatus: Vorgeschlagen – nicht bestätigt");
+    expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("unknown");
+    expect(last).not.toHaveTextContent("Manuell gewählt");
     const taxRate = screen.getByRole("textbox", {name: "Position 1 Steuersatz"});
     expect(taxRate).toHaveValue("7%");
     fireEvent.change(screen.getByRole("combobox", {name: "Position 1 Kategorie"}), {
       target: {value: "other"},
     });
-    expect(first).toHaveTextContent("Kategoriestatus: Manuell zugeordnet");
+    expect(first).toHaveTextContent("Manuell gewählt");
     expect(first).not.toHaveClass("line-item--unclassified");
-    expect(screen.getByRole("table")).toHaveTextContent("Sonstiges");
+    expect(screen.getByRole("table",{hidden:true})).toHaveTextContent("Sonstiges");
     expect(taxRate).toHaveValue("7%");
     fireEvent.change(screen.getByRole("combobox", {name: "Position 1 Kategorie"}), {
       target: {value: "unknown"},
     });
-    expect(first).toHaveTextContent("Kategoriestatus: Unbekannt");
+    expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("unknown");
     expect(first).not.toHaveClass("line-item--unclassified");
   });
   it("hides findings UI when source-backed arithmetic has no findings", () => {
@@ -298,15 +298,14 @@ describe("position sum in the browser invoice review", () => {
       return <InvoiceReview pdf={pdf} draft={current} onDraftChange={setCurrent}/>;
     }
     render(<LocalHarness/>);
-    expect(screen.getByText("Ohne Umsatzsteuer (im Namen der Gemeinde)")).toBeInTheDocument();
-    expect(screen.getByText(/USt-Betrag: 0,00 €/)).toBeInTheDocument();
+    expect(screen.getByText("Im Namen der Gemeinde · ohne USt (0,00 €)")).toBeInTheDocument();
     expect(screen.queryByRole("textbox",{name:"Position 1 Steuersatz"})).not.toBeInTheDocument();
     expect(screen.queryByText(/ohne belegten Steuersatz oder Steuerstatus/i)).not.toBeInTheDocument();
     expect(screen.getAllByRole("button",{name:"Fundstelle S. 1 im PDF ansehen"})).toHaveLength(2);
     fireEvent.click(screen.getByRole("button",{name:"Steuerangabe korrigieren"}));
-    expect(screen.queryByText("Ohne Umsatzsteuer (im Namen der Gemeinde)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Im Namen der Gemeinde · ohne USt (0,00 €)")).not.toBeInTheDocument();
     expect(screen.getByRole("textbox",{name:"Position 1 Steuersatz"})).toHaveValue("");
-    expect(screen.getByText(/Kein belegter Steuersatz oder Steuerstatus/)).toBeInTheDocument();
+    expect(screen.getByText(/Position\(en\) ohne belegten Steuersatz oder Steuerstatus/)).toBeInTheDocument();
   });
 
 
@@ -326,6 +325,47 @@ describe("position sum in the browser invoice review", () => {
     expect(screen.getByRole("heading",{name:"Rechnungsangaben"})).toHaveFocus();
     fireEvent.click(screen.getAllByRole("button",{name:"Steuergruppen prüfen"})[0]!);
     expect(screen.getByRole("heading",{name:"Ausgewiesene Steuergruppen"})).toHaveFocus();
+  });
+
+
+  it("keeps the optional category overview collapsed until requested", () => {
+    render(<Harness />);
+    const details = screen.getByText("Kategorienübersicht").closest("details");
+    expect(details).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("Kategorienübersicht"));
+    expect(details).toHaveAttribute("open");
+    expect(screen.getByRole("table")).toHaveTextContent("Kurtaxe / Beherbergungssteuer");
+  });
+
+  it("shows source-backed net amounts without repeating the unknown-basis disclaimer", () => {
+    const base: InvoiceDraft = {
+      ...initialDraft,
+      fields: {
+        ...emptyFields(),
+        netTotal:{value:"100,00",origin:"pdf",evidenceIds:["net"]},
+        taxTotal:{value:"19,00",origin:"pdf",evidenceIds:["vat"]},
+        grossTotal:{value:"119,00",origin:"pdf",evidenceIds:["gross"]},
+      },
+      items:[{
+        id:"source-item",description:"Beratungsleistung",quantity:"1",unitPrice:"100,00",
+        amount:"100,00",taxRate:"19%",origin:"pdf",evidenceIds:["item"],
+        amountBasis:{kind:"net",origin:"pdf",evidenceIds:["header"]},
+      }],
+    };
+    function LocalHarness() {
+      const [current,setCurrent] = useState(base);
+      return <InvoiceReview pdf={pdf} draft={current} onDraftChange={setCurrent}/>;
+    }
+    render(<LocalHarness />);
+    expect(screen.getByText("Betrag (Netto)")).toBeInTheDocument();
+    expect(screen.getByText("Summe der erkannten Netto-Positionen")).toBeInTheDocument();
+    expect(screen.queryByText(/Kein automatischer Abgleich mit dem Rechnungsbetrag/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox",{name:"Position 1 Betrag"}), {
+      target:{value:"101,00"},
+    });
+    expect(screen.getByText("Betrag (Basis unbekannt)")).toBeInTheDocument();
+    expect(screen.getByText("Summe der erkannten Positionen")).toBeInTheDocument();
+    expect(screen.getByText(/Kein automatischer Abgleich mit dem Rechnungsbetrag/)).toBeInTheDocument();
   });
 
 });

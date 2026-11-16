@@ -65,16 +65,22 @@ describe("cancelling a local extraction", () => {
     read.mockResolvedValueOnce({
       pdf: {numPages: 1, loadingTask: {destroy}},
       draft: {pageCount: 1, sourceLines: [], fields: emptyFields(), items: [], taxGroups: [], warnings: []},
+      originalDraft: {pageCount: 1, sourceLines: [], fields: emptyFields(), items: [], taxGroups: [], warnings: []},
     } as unknown as LoadedInvoice);
     render(<App />);
     selectAndRead();
     await waitFor(() => expect(screen.getByTestId("invoice-review")).toBeInTheDocument());
-    expect(screen.getByRole("heading", {name: "Ausgewählte Rechnung"})).toBeInTheDocument();
+    expect(screen.getByRole("region", {name:"ZUGFeRD-Export"})).toBeInTheDocument();
+    expect(screen.queryByRole("heading", {name: "Ausgewählte Rechnung"})).not.toBeInTheDocument();
     expect(screen.getByText("first.pdf")).toBeInTheDocument();
     expect(screen.queryByText(/Rechnungspositionen und Beträge auslesen/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/OCR für gescannte PDFs/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", {name: "PDF lokal auslesen"})).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Andere PDF auswählen")).toBeInTheDocument();
+    expect(screen.getByLabelText("PDF wechseln")).toBeInTheDocument();
+    expect(screen.getByText("Wechseln")).toBeInTheDocument();
+    expect(screen.queryByText(/keine Übertragung an einen Server/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Export noch nicht verfügbar\. Die erforderlichen/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/noch nicht verfügbar/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", {name: "Entfernen"}));
     expect(destroy).toHaveBeenCalledOnce();
     expect(screen.queryByTestId("invoice-review")).not.toBeInTheDocument();

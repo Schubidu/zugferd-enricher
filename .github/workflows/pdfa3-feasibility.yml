@@ -1,0 +1,164 @@
+name: PDF/A-3 feasibility - synthetic only
+
+on:
+  pull_request:
+    paths:
+      - "scripts/make_synthetic_pdf.py"
+      - "scripts/compare_ppm.py"
+      - "src/export/**"
+      - ".github/workflows/pdfa3-feasibility.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-pdfa:
+    name: Independent PDF/A-3 conversion experiment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Create synthetic-only PDF and CII from actual generator
+        run: |
+          set -euo pipefail
+          npm ci
+          python3 scripts/make_synthetic_pdf.py "$RUNNER_TEMP/original.pdf"
+          CII_VALIDATION_OUTPUT="$RUNNER_TEMP/synthetic-cii.xml" \
+            npm run test -- src/export/cii-candidate.test.ts
+          test -s "$RUNNER_TEMP/original.pdf"
+          test -s "$RUNNER_TEMP/synthetic-cii.xml"
+
+      - name: Install evaluation-only Ghostscript and ICC resources
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ghostscript icc-profiles-free poppler-utils
+
+      - name: Create experimental PDF/A-3b from synthetic PDF
+        run: |
+          set -euo pipefail
+          # Use the installed Ghostscript definition as a basis. No AGPL code
+          # is copied into the MIT application or distributed to browsers.
+          DEFINITION="$(find /usr/share/ghostscript -name PDFA_def.ps -print -quit)"
+          PROFILE="$(find /usr/share/ghostscript /usr/share/color -type f -iname '*srgb*.icc' -print -quit 2>/dev/null)"
+          test -n "$DEFINITION"
+          test -n "$PROFILE"
+          export DEFINITION PROFILE
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          original = Path(os.environ["DEFINITION"]).read_text()
+          updated, count = re.subn(
+              r"^/ICCProfile\s+\([^)]*\)",
+              "/ICCProfile (" + os.environ["PROFILE"] + ")",
+              original, count=1, flags=re.M,
+          )
+          if count != 1:
+              raise SystemExit("Ghostscript PDF/A ICC configuration pattern unsupported")
+          Path(os.environ["RUNNER_TEMP"], "PDFA_ci_def.ps").write_text(updated)
+          PY
+          gs -dPDFA=3 -dBATCH -dNOPAUSE -dNOOUTERSAVE \
+            --permit-file-read="$PROFILE" \
+            -dPDFACompatibilityPolicy=2 -sColorConversionStrategy=RGB \
+            -sDEVICE=pdfwrite \
+            -sOutputFile="$RUNNER_TEMP/converted-pdfa3.pdf" \
+            "$RUNNER_TEMP/PDFA_ci_def.ps" "$RUNNER_TEMP/original.pdf"
+          test -s "$RUNNER_TEMP/converted-pdfa3.pdf"
+          # This checks extractable text only, NOT rendered appearance.
+          pdftotext -layout "$RUNNER_TEMP/original.pdf" "$RUNNER_TEMP/original.txt"
+          pdftotext -layout "$RUNNER_TEMP/converted-pdfa3.pdf" "$RUNNER_TEMP/converted.txt"
+          diff -u "$RUNNER_TEMP/original.txt" "$RUNNER_TEMP/converted.txt"
+          # One resolution can pass while a different one does not (font hinting).
+          # This is a *diagnostic* for a synthetic PoC, not user export approval.
+          for dpi in 120 144; do
+            pdftoppm -r "$dpi" -f 1 -l 1 -singlefile \
+              "$RUNNER_TEMP/original.pdf" "$RUNNER_TEMP/original-render-$dpi"
+            pdftoppm -r "$dpi" -f 1 -l 1 -singlefile \
+              "$RUNNER_TEMP/converted-pdfa3.pdf" "$RUNNER_TEMP/converted-render-$dpi"
+            if ! python3 scripts/compare_ppm.py \
+                "$RUNNER_TEMP/original-render-$dpi.ppm" \
+                "$RUNNER_TEMP/converted-render-$dpi.ppm"; then
+              echo "::warning::Converted synthetic invoice differs visually at ${dpi}dpi. Browser export MUST remain blocked."
+            fi
+          done
+
+      - name: Independent veraPDF PDF/A-3b positive and negative controls
+        run: |
+          set -euo pipefail
+          VALIDATOR="docker.io/verapdf/cli@sha256:f085855d442ad415e79fabbabcdd1803c2db4ee097cd5b94506c95ecdcfa1728"
+          docker run --rm -v "$RUNNER_TEMP:/data:ro" "$VALIDATOR" \
+            --flavour 3b --format xml /data/converted-pdfa3.pdf \
+            > "$RUNNER_TEMP/converted-verapdf.xml"
+          grep -q 'isCompliant="true"' "$RUNNER_TEMP/converted-verapdf.xml"
+          if grep -Eq 'isCompliant="false"|<taskException' "$RUNNER_TEMP/converted-verapdf.xml"; then
+            cat "$RUNNER_TEMP/converted-verapdf.xml"
+            exit 1
+          fi
+
+          # Baseline unconverted PDF must fail; otherwise validator is inert.
+          docker run --rm -v "$RUNNER_TEMP:/data:ro" "$VALIDATOR" \
+            --flavour 3b --format xml /data/original.pdf \
+            > "$RUNNER_TEMP/negative-verapdf.xml" || true
+          grep -q 'isCompliant="false"' "$RUNNER_TEMP/negative-verapdf.xml"
+          if grep -q 'isCompliant="true"' "$RUNNER_TEMP/negative-verapdf.xml"; then
+            echo "::error::veraPDF accepted a non-archival baseline PDF"
+            exit 1
+          fi
+          echo "PDF/A-3b experiment passed; NOT a browser-local conversion implementation."
+
+      - name: Attach independently valid EN16931 CII to PDF/A-3 (experiment)
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/Mustang-CLI.jar" \
+            https://repo.maven.apache.org/maven2/org/mustangproject/Mustang-CLI/2.26.0/Mustang-CLI-2.26.0.jar
+          echo "42d7868cb68264874a7b8cab4c3587b03b23ccc7cd72373da917f66758bb9736  $RUNNER_TEMP/Mustang-CLI.jar" | \
+            sha256sum --check --status
+          java -Xmx2g -jar "$RUNNER_TEMP/Mustang-CLI.jar" \
+            --action combine --source "$RUNNER_TEMP/converted-pdfa3.pdf" \
+            --source-xml "$RUNNER_TEMP/synthetic-cii.xml" \
+            --out "$RUNNER_TEMP/derivative.pdf" \
+            --format zf --version 2 --profile E \
+            --no-additional-attachments
+          test -s "$RUNNER_TEMP/derivative.pdf"
+
+      - name: Independently validate embedded PDF/A-3 and XML
+        run: |
+          set -euo pipefail
+          VALIDATOR="docker.io/verapdf/cli@sha256:f085855d442ad415e79fabbabcdd1803c2db4ee097cd5b94506c95ecdcfa1728"
+          docker run --rm -v "$RUNNER_TEMP:/data:ro" "$VALIDATOR" \
+            --flavour 3b --format xml /data/derivative.pdf \
+            > "$RUNNER_TEMP/derivative-verapdf.xml"
+          grep -q 'isCompliant="true"' "$RUNNER_TEMP/derivative-verapdf.xml"
+          if grep -Eq 'isCompliant="false"|<taskException' "$RUNNER_TEMP/derivative-verapdf.xml"; then
+            cat "$RUNNER_TEMP/derivative-verapdf.xml"
+            exit 1
+          fi
+          java -Xmx2g -jar "$RUNNER_TEMP/Mustang-CLI.jar" \
+            --action validate --source "$RUNNER_TEMP/derivative.pdf" \
+            --disable-file-logging | tee "$RUNNER_TEMP/derivative-mustang.xml"
+          grep -q '<summary status="valid"/>' "$RUNNER_TEMP/derivative-mustang.xml"
+          java -Xmx2g -jar "$RUNNER_TEMP/Mustang-CLI.jar" \
+            --action extract --source "$RUNNER_TEMP/derivative.pdf" \
+            --out "$RUNNER_TEMP/extracted.xml"
+          cmp "$RUNNER_TEMP/synthetic-cii.xml" "$RUNNER_TEMP/extracted.xml"
+          pdftotext -layout "$RUNNER_TEMP/derivative.pdf" "$RUNNER_TEMP/derivative.txt"
+          diff -u "$RUNNER_TEMP/original.txt" "$RUNNER_TEMP/derivative.txt"
+          for dpi in 120 144; do
+            pdftoppm -r "$dpi" -f 1 -l 1 -singlefile \
+              "$RUNNER_TEMP/derivative.pdf" "$RUNNER_TEMP/derivative-render-$dpi"
+            if ! python3 scripts/compare_ppm.py \
+                "$RUNNER_TEMP/original-render-$dpi.ppm" \
+                "$RUNNER_TEMP/derivative-render-$dpi.ppm"; then
+              echo "::warning::Hybrid synthetic invoice differs visually at ${dpi}dpi. Browser export MUST remain blocked."
+            fi
+          done
+          echo "Synthetic container conformance passed; visual differences are reported, not cleared."

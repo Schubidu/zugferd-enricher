@@ -1,6 +1,6 @@
-import { isSourceBackedNoVat } from "./model";
+import { isSourceBackedNet, isSourceBackedNoVat } from "./model";
 import type { InvoiceDraft } from "./model";
-import { checkTotals, formatEuroCents, parseCents } from "./money";
+import { checkTotals, formatEuroCents, parseCents, sumLineItemAmounts } from "./money";
 
 export type Finding = {
   id: string;
@@ -41,6 +41,27 @@ export function reconcileInvoice(draft: InvoiceDraft): Finding[] {
     });
   } else if (totals.status === "unknown") {
     findings.push({id:"document-total",severity:"review",message:"Dokumentsumme nicht vollständig belegbar.",evidenceIds:[]});
+  }
+
+  // The item-sum comparison is justified only if each amount is explicitly
+  // labelled NETTO in its own PDF page's source-backed column heading.
+  if (draft.items.length > 0 && draft.items.every(isSourceBackedNet) &&
+    draft.fields.netTotal?.origin === "pdf") {
+    const printedNet = parseCents(draft.fields.netTotal.value);
+    const recognized = sumLineItemAmounts(draft.items).totalCents;
+    if (printedNet !== null && recognized !== null && printedNet !== recognized) {
+      findings.push({
+        id: "item-net-sum", severity: "review",
+        message: "Die erkannten Netto-Positionen ergeben " + formatEuroCents(recognized) +
+          ", das Original weist " + formatEuroCents(printedNet) +
+          " aus. Bitte auf fehlende oder doppelte Positionen prüfen.",
+        evidenceIds: [
+          ...draft.items.flatMap(item => item.evidenceIds),
+          ...draft.items.flatMap(item => item.amountBasis?.evidenceIds ?? []),
+          ...draft.fields.netTotal.evidenceIds,
+        ],
+      });
+    }
   }
 
   for (const group of draft.taxGroups) {

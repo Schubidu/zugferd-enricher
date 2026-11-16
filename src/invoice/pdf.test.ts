@@ -10,9 +10,12 @@ vi.mock("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url", async () => {
   };
 });
 import { loadInvoicePdf } from "./pdf";
+import { sumLineItemAmounts } from "./money";
+import { reconcileInvoice } from "./reconcile";
+import { comparePdfTextFidelity } from "../export/pdf-text-fidelity";
 
 /** Synthetic, fully in-memory PDFs; never add real customer invoices to this repository. */
-function makePdf(pages: string[][]): Uint8Array {
+function makePdf(pages: string[][], xOffset = 50): Uint8Array {
   const encoder = new TextEncoder();
   const pageIds = pages.map((_, i) => 4 + 2*i);
   const objects: string[] = [
@@ -24,7 +27,7 @@ function makePdf(pages: string[][]): Uint8Array {
     const contentId = 5 + 2*index;
     const stream = lines.map((line, i) => {
       const safe = line.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-      return "BT /F1 12 Tf 50 " + (740-24*i) + " Td (" + safe + ") Tj ET\n";
+      return "BT /F1 12 Tf " + xOffset + " " + (740-24*i) + " Td (" + safe + ") Tj ET\n";
     }).join("");
     objects.push(
       "<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /MediaBox [0 0 612 792] /Contents " + contentId + " 0 R >>",
@@ -62,6 +65,12 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
     try {
       expect(result.pdf.numPages).toBe(2);
       expect(result.draft.fields.invoiceNumber?.value).toBe("H-2026-014");
+      expect(result.originalDraft).toEqual(result.draft);
+      expect(result.originalDraft).not.toBe(result.draft);
+      expect(result.originalDraft.sourceLines).not.toBe(result.draft.sourceLines);
+      result.draft.fields.invoiceNumber!.value = "MANUAL-CHANGE";
+      expect(result.originalDraft.fields.invoiceNumber?.value).toBe("H-2026-014");
+      expect(result.originalDraft.items[0]?.amount).toBe("200,00");
       expect(result.draft.fields.grossTotal?.value).toBe("243,75");
       expect(result.draft.items.map(x => x.taxRate)).toEqual(["7%", "19%"]);
       expect(result.draft.sourceLines.some(x => x.page === 2)).toBe(true);
@@ -104,6 +113,147 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
     controller.abort();
     finishReading?.(Uint8Array.from(makePdf([["Gross total: 120.00"]])).buffer);
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+
+  it("reads a TEST-05-like Kurtaxe source note end-to-end through PDF.js", async () => {
+    const result = await loadInvoicePdf(fakeLocalPdf(makePdf([[
+      "Rechnungsaussteller: Hotel Am Markt Test GmbH",
+      "Buyer: Musterwerk Analytics UG",
+      "Rechnungsnummer: HAM-2026-315",
+      "Rechnungsdatum: 15.11.2026",
+      "LEISTUNG - MENGE x EINZELPREIS = POSITION NETTO - UST",
+      "Logis 12.11.2026 1 x 105,00 105,00 7%",
+      "Logis 13.11.2026 1 x 125,00 125,00 7%",
+      "Logis 14.11.2026 1 x 118,00 118,00 7%",
+      "Breakfast Speisen 3 x 14,00 42,00 7%",
+      "Breakfast Drinks 3 x 5,00 15,00 19%",
+      "Parken 2 x 8,00 16,00 19%",
+      "Kurtaxe 3 x 3,50 10,50",
+      "USt 7% Netto 390,00 Steuer 27,30",
+      "USt 19% Netto 31,00 Steuer 5,89",
+      "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 10,50",
+      "Nettosumme 431,50",
+      "Umsatzsteuer gesamt 33,19",
+      "Gesamtbetrag 464,69",
+    ]])));
+    try {
+      expect(result.draft.items).toHaveLength(7);
+      expect(result.draft.items.every(item => item.amountBasis?.kind === "net")).toBe(true);
+      expect(result.draft.items.filter(x => x.description === "Kurtaxe")).toHaveLength(1);
+      expect(result.draft.items.find(x => x.description === "Kurtaxe")?.taxTreatment?.kind)
+        .toBe("third_party_no_vat");
+      expect(sumLineItemAmounts(result.draft.items).totalCents).toBe(43150n);
+      expect(result.draft.fields.grossTotal?.value).toBe("464,69");
+      expect(reconcileInvoice(result.draft)).toEqual([]);
+    } finally {
+      await result.pdf.loadingTask.destroy();
+    }
+  });
+
+  it("keeps TEST-04's unknown bundle VAT status as the only arithmetic review action", async () => {
+    const result = await loadInvoicePdf(fakeLocalPdf(makePdf([[
+      "Rechnungsnummer: SAF-2026-802",
+      "LEISTUNG / ARTIKEL - MENGE x EINZELPREIS = NETTOBETRAG - UST",
+      "Logis 1 x 99,00 99,00 7%",
+      "Logis 1 x 129,00 129,00 7%",
+      "Logis 1 x 149,00 149,00 7%",
+      "Logis 1 x 109,00 109,00 7%",
+      "Logis 1 x 119,00 119,00 7%",
+    ],[
+      "Rechnungsnummer: SAF-2026-802",
+      "LEISTUNG / ARTIKEL - MENGE x EINZELPREIS = NETTOBETRAG - UST",
+      "Food 1 x 85,00 85,00 7%",
+      "Dinner 1 x 28,00 28,00 7%",
+      "Lunch 1 x 48,00 48,00 7%",
+      "Parking 1 x 80,00 80,00 19%",
+      "Drinks 1 x 15,00 15,00 19%",
+      "Espresso 1 x 9,00 9,00 19%",
+      "WLAN 1 x 10,00 10,00 19%",
+    ],[
+      "Rechnungsnummer: SAF-2026-802",
+      "LEISTUNG / ARTIKEL - MENGE x EINZELPREIS = NETTOBETRAG - UST",
+      "Business Paket 1 x 29,00 29,00",
+      "USt 7% Netto 766,00 Steuer 53,62",
+      "USt 19% Netto 143,00 Steuer 27,17",
+      "Nettosumme 909,00",
+      "Umsatzsteuer gesamt 80,79",
+      "Gesamtbetrag 989,79",
+    ]])));
+    try {
+      expect(result.draft.items).toHaveLength(13);
+      expect(result.draft.items.every(item => item.amountBasis?.kind === "net")).toBe(true);
+      expect(result.draft.items.find(item => item.description === "Business Paket")?.taxRate).toBeNull();
+      expect(result.draft.fields.invoiceNumber?.value).toBe("SAF-2026-802");
+      expect(sumLineItemAmounts(result.draft.items).totalCents).toBe(90900n);
+      expect(reconcileInvoice(result.draft).map(x => x.id)).toEqual(["missing-tax-rates"]);
+    } finally {
+      await result.pdf.loadingTask.destroy();
+    }
+  });
+
+  it("checks the original and a prospective derivative for identical PDF text and geometry", async () => {
+    const bytes = makePdf([
+      ["Rechnungsnummer: F-001","Logis 2 x 100,00 200,00 7%"],
+      ["USt 7% Netto 200,00 Steuer 14,00","Gesamtbetrag 214,00"],
+    ]);
+    const original = await loadInvoicePdf(fakeLocalPdf(bytes));
+    const derivative = await loadInvoicePdf(fakeLocalPdf(bytes));
+    try {
+      await expect(comparePdfTextFidelity(original.pdf,derivative.pdf)).resolves.toEqual({
+        status:"matched-text-layout",pages:2,
+      });
+    } finally {
+      await original.pdf.loadingTask.destroy();
+      await derivative.pdf.loadingTask.destroy();
+    }
+  });
+
+  it("detects changed amounts and moved text even when PDFs otherwise look similar", async () => {
+    const source = makePdf([["Service 2 x 100,00 200,00 19%"]]);
+    const differentMoney = makePdf([["Service 2 x 100,00 210,00 19%"]]);
+    const movedText = makePdf([["Service 2 x 100,00 200,00 19%"]], 60);
+    const original = await loadInvoicePdf(fakeLocalPdf(source));
+    const incorrect = await loadInvoicePdf(fakeLocalPdf(differentMoney));
+    const shifted = await loadInvoicePdf(fakeLocalPdf(movedText));
+    try {
+      const amount = await comparePdfTextFidelity(original.pdf,incorrect.pdf);
+      expect(amount).toEqual({status:"mismatch",reasons:[{page:1,code:"TEXT_CHANGED"}]});
+      const position = await comparePdfTextFidelity(original.pdf,shifted.pdf);
+      expect(position).toEqual({status:"mismatch",reasons:[{page:1,code:"TEXT_LAYOUT_CHANGED"}]});
+    } finally {
+      await original.pdf.loadingTask.destroy();
+      await incorrect.pdf.loadingTask.destroy();
+      await shifted.pdf.loadingTask.destroy();
+    }
+  });
+
+  it("refuses missing or unextractable pages instead of claiming visual fidelity", async () => {
+    const first = await loadInvoicePdf(fakeLocalPdf(makePdf([["Rechnung 100,00"]])));
+    const twoPages = await loadInvoicePdf(fakeLocalPdf(makePdf([["Rechnung 100,00"],["Seite 2"]])));
+    const unreadable = await loadInvoicePdf(fakeLocalPdf(makePdf([[]])));
+    try {
+      expect(await comparePdfTextFidelity(first.pdf,twoPages.pdf))
+        .toEqual({status:"mismatch",reasons:[{page:null,code:"PAGE_COUNT"}]});
+      expect(await comparePdfTextFidelity(unreadable.pdf,unreadable.pdf))
+        .toEqual({status:"mismatch",reasons:[{page:1,code:"TEXT_MISSING"}]});
+    } finally {
+      await first.pdf.loadingTask.destroy();
+      await twoPages.pdf.loadingTask.destroy();
+      await unreadable.pdf.loadingTask.destroy();
+    }
+  });
+
+  it("cancels PDF parity work before opening pages", async () => {
+    const original = await loadInvoicePdf(fakeLocalPdf(makePdf([["Rechnung 100,00"]])));
+    try {
+      const controller = new AbortController();
+      controller.abort();
+      await expect(comparePdfTextFidelity(original.pdf,original.pdf,controller.signal))
+        .rejects.toMatchObject({name:"AbortError"});
+    } finally {
+      await original.pdf.loadingTask.destroy();
+    }
   });
 
 });

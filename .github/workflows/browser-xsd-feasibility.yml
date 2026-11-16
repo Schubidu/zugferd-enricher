@@ -1,0 +1,52 @@
+name: Browser WASM XSD feasibility - synthetic only
+
+on:
+  pull_request:
+    paths:
+      - "scripts/probe-browser-xsd.mjs"
+      - "src/export/**"
+      - ".github/workflows/browser-xsd-feasibility.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  xsd-wasm:
+    name: Official EN16931 XSD in memory-only libxml2 WASM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Generate synthetic-only CII from actual renderer
+        run: |
+          set -euo pipefail
+          npm ci
+          CII_VALIDATION_OUTPUT="$RUNNER_TEMP/synthetic-cii.xml" \
+            npm run test -- src/export/cii-candidate.test.ts
+          test -s "$RUNNER_TEMP/synthetic-cii.xml"
+      - name: Obtain exact validator release and extract its EN16931 XSDs
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/Mustang-CLI.jar" \
+            https://repo.maven.apache.org/maven2/org/mustangproject/Mustang-CLI/2.26.0/Mustang-CLI-2.26.0.jar
+          echo "42d7868cb68264874a7b8cab4c3587b03b23ccc7cd72373da917f66758bb9736  $RUNNER_TEMP/Mustang-CLI.jar" | \
+            sha256sum --check --status
+          mkdir -p "$RUNNER_TEMP/cii-xsd"
+          unzip -qq -j "$RUNNER_TEMP/Mustang-CLI.jar" \
+            "schema/ZF_250/EN16931/*.xsd" -d "$RUNNER_TEMP/cii-xsd"
+          test -s "$RUNNER_TEMP/cii-xsd/FACTUR-X_EN16931.xsd"
+          find "$RUNNER_TEMP/cii-xsd" -maxdepth 1 -name '*.xsd' -printf '%f\n' | sort
+      - name: Probe WASM XSD parsing, local imports and invalid fixtures
+        run: |
+          set -euo pipefail
+          # Evaluation-only; intentionally no package.json/lock changes and
+          # absolutely no native/browser runtime library enabled by this PoC.
+          npm install --no-save --package-lock=false --ignore-scripts libxml2-wasm@0.7.2
+          node --max-old-space-size=256 scripts/probe-browser-xsd.mjs \
+            "$RUNNER_TEMP/cii-xsd" "$RUNNER_TEMP/synthetic-cii.xml"

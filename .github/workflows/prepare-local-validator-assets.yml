@@ -1,0 +1,61 @@
+name: Prepare pinned local validator assets (no publishing)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Prepare locked browser validator dependencies
+        run: |
+          set -euo pipefail
+          npm install --save-exact --ignore-scripts libxml2-wasm@0.7.2 @tradik/xslt3@1.0.0 @xmldom/xmldom@0.9.12
+          npm ci
+          mkdir -p "$RUNNER_TEMP/browser-validator-bundle"
+          cp package.json package-lock.json "$RUNNER_TEMP/browser-validator-bundle/"
+      - name: Fetch checked release and package only required Apache-2.0 validator artefacts
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/Mustang-CLI.jar" \
+            https://repo.maven.apache.org/maven2/org/mustangproject/Mustang-CLI/2.26.0/Mustang-CLI-2.26.0.jar
+          echo "42d7868cb68264874a7b8cab4c3587b03b23ccc7cd72373da917f66758bb9736  $RUNNER_TEMP/Mustang-CLI.jar" | sha256sum --check --status
+          TARGET="$RUNNER_TEMP/browser-validator-bundle/public/validation/ferd-2.5.2"
+          mkdir -p "$TARGET"
+          unzip -qq -j "$RUNNER_TEMP/Mustang-CLI.jar" 'schema/ZF_250/EN16931/*.xsd' -d "$TARGET"
+          unzip -qq -j "$RUNNER_TEMP/Mustang-CLI.jar" \
+            'xslt/ZF_250/FACTUR-X_EN16931.xslt' \
+            'xslt/ZF_250/FACTUR-X_EN16931_codedb.xml' \
+            'xslt/en16931schematron/EN16931-CII-validation.xslt' -d "$TARGET"
+          test "$(find "$TARGET" -name '*.xsd' | wc -l)" = 4
+          test "$(find "$TARGET" -name '*.xslt' | wc -l)" = 2
+          test "$(find "$TARGET" -name '*.xml' | wc -l)" = 1
+          (cd "$TARGET" && sha256sum *.xsd *.xslt *.xml > SHA256SUMS)
+          cat "$TARGET/SHA256SUMS"
+          cp "$TARGET/SHA256SUMS" "$RUNNER_TEMP/browser-validator-bundle/RESOURCE_HASHES.txt"
+          cat > "$TARGET/NOTICE.md" <<'NOTICE'
+          ZUGFeRD 2.5.2 / Factur-X 1.09.2 EN16931 technical resources
+          Source: Mustangproject CLI 2.26.0, SHA-256:
+          42d7868cb68264874a7b8cab4c3587b03b23ccc7cd72373da917f66758bb9736
+          Original rights and conditions: https://www.ferd-net.de/ueber-uns/ressourcen-1/veroeffentlichungen/haftungsausschluss-und-nutzungsrechte
+          Technical XSD and Schematron files are subject to Apache License 2.0.
+          Their presence in this test bundle is NOT a claim that an arbitrary
+          invoice meets EN16931 conformance.
+          NOTICE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: local-validator-bundle
+          path: ${{ runner.temp }}/browser-validator-bundle/
+          retention-days: 2
+          if-no-files-found: error

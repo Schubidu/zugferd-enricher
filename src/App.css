@@ -26,10 +26,17 @@ h1 span { color: #47749c; }
 .lead { font-size: clamp(1rem, 2.4vw, 1.15rem); max-width: 660px; color: #576779; line-height: 1.7; margin: 22px auto 34px; }
 .hero--reviewing { padding: 14px 0 0; text-align: left; max-width: none; }
 .hero--reviewing h1 { font-size: 1.25rem; letter-spacing: -.02em; margin-bottom: 10px; }
-.hero--reviewing .upload-panel { padding: 14px 18px; border: 1px solid #cad6e4; border-radius: 12px; box-shadow: none; }
-.hero--reviewing .upload-panel > p { margin: 6px 0; }
-.hero--reviewing .selected-file { margin-top: 10px; padding: 10px 12px; }
-.hero--reviewing .file-button { margin-top: 10px; }
+.hero--reviewing .upload-panel { padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.hero--reviewing .selected-file { margin-top: 0; padding: 9px 12px; background: #fff; border-color: #dae3ed; }
+.hero--reviewing .selected-file-details span { color: #647388; }
+.hero--reviewing .file-button {
+  background: #fff; color: #1d416c; border: 1px solid #a4bacb;
+  font-size: .84rem; font-weight: 650; border-radius: 8px; padding: 8px 12px;
+}
+.hero--reviewing .file-button:hover { background: #f1f5fa; }
+.selected-file-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.selected-file-actions .reset-button { font-size: .84rem; background: transparent; border-color: #dae3ed; color: #4c5e72; }
+.selected-file-actions .reset-button:hover { background: #f1f5fa; }
 .upload-panel { position: relative; background: white; border: 2px dashed #cad6e4; border-radius: 22px; padding: 34px 24px 30px; box-shadow: 0 12px 42px rgba(28, 53, 88, .045); }
 .file-mark { color: #5177a6; margin: 0 auto 13px; }
 .upload-panel h2 { font-size: 1.2rem; margin: 0 0 7px; letter-spacing: -.02em; }
@@ -55,6 +62,9 @@ h1 span { color: #47749c; }
   .upload-panel { padding: 28px 17px; }
   .footer { flex-direction: column; }
   .selected-file { flex-direction: column; align-items: stretch; }
+  .hero--reviewing .selected-file { gap: 8px; }
+  .hero--reviewing .selected-file-actions { justify-content: flex-start; }
+  .hero--reviewing .file-button, .hero--reviewing .reset-button { min-width: 110px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; }
@@ -126,22 +136,27 @@ h1 span { color: #47749c; }
 }
 
 .position-sum {
-  display: grid;
-  gap: 7px;
-  padding: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  padding: 13px 0 0;
   margin-top: 16px;
-  border-top: 2px solid #9cb3cb;
-  border-radius: 8px;
-  background: #f1f5fa;
+  border-top: 1px solid #dce4ed;
 }
-.position-sum-label { font-size: .91rem; font-weight: 700; color: #274562; }
-.position-sum-value { font-size: 1.5rem; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.position-sum-label { font-size: .88rem; font-weight: 650; color: #274562; }
+.position-sum-value { font-size: 1.18rem; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.position-sum .quiet, .position-sum-error { flex-basis: 100%; font-size: .78rem; }
 .position-sum .quiet { margin: 0; }
 .position-sum-error { margin: 0; color: #8a2930; font-size: .85rem; }
 
 .category-field { display: grid; gap: 5px; margin-top: 12px; font-size: .82rem; font-weight: 650; }
 .category-field select { min-height: 44px; width: 100%; border: 1px solid #b2c2d4; border-radius: 8px; background: #fff; color: #152238; padding: 8px 10px; }
-.category-origin { color: #53677b; font-size: .78rem; margin: 5px 0; }
+.category-origin { color: #53677b; font-size: .76rem; display: inline-block; margin: 4px 0 0; }
+.category-overview summary { cursor: pointer; font-size: 1rem; font-weight: 650; min-height: 44px; display: flex; align-items: center; }
+.category-overview[open] .category-summary-scroll { margin-top: 8px; }
+.line-item-meta { color: #506477; font-size: .8rem; font-weight: 400; }
+.field-meta:empty { display: none; }
 .source-tax-treatment { display: grid; align-content: start; gap: 5px; min-width: 0; font-size: .82rem; color: #334c64; }
 .source-tax-treatment .evidence-link, .source-tax-treatment .review-action { justify-self: start; }
 .reconciliation-findings { padding: 0; list-style: none; margin: 14px 0 0; display: grid; gap: 9px; }
@@ -218,3 +233,26 @@ h1 span { color: #47749c; }
   .evidence-dialog-content { max-height: 100dvh; }
   .evidence-dialog .pdf-scroll { max-height: calc(100dvh - 190px); }
 }
+
+/* Export is a secondary capability, intentionally below the invoice review. */
+.export-status {
+  padding: 10px 0;
+  margin: -32px 0 24px;
+  border-top: 1px solid #dce4ed;
+}
+.export-status-details { font-size: .85rem; }
+.export-status-details summary {
+  cursor: pointer;
+  color: #1a507c;
+  font-weight: 650;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.export-status-details summary span { font-weight: 400; color: #617184; margin-left: 4px; }
+.export-status-breakdown { display: grid; gap: 10px; padding: 4px 0 16px; }
+.export-status-breakdown > div { max-width: 850px; }
+.export-status-breakdown h3 { margin: 0 0 5px; font-size: .9rem; }
+.export-status-breakdown ul { margin: 0; padding-left: 22px; display: grid; gap: 5px; }
+.export-status-breakdown li, .export-status-breakdown p { margin: 0; line-height: 1.5; }
+.export-status-breakdown p { color: #516478; }
