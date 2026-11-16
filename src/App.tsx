@@ -172,13 +172,13 @@ function App() {
 
       {loaded && (
         <>
-          <ExportStatus original={loaded.originalDraft} reviewed={loaded.draft} />
           <InvoiceReview
             key={generation.current}
             pdf={loaded.pdf}
             draft={loaded.draft}
             onDraftChange={draft => setLoaded(current => current ? {...current, draft} : current)}
           />
+          <ExportStatus original={loaded.originalDraft} reviewed={loaded.draft} />
         </>
       )}
 
