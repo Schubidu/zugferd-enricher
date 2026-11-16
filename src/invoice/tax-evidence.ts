@@ -120,6 +120,7 @@ const authority = /\b(?:im\s+Namen|im\s+Auftrag)\s+(?:der|des)\s+(?:Gemeinde|Sta
 const noVat = /\b(?:ohne\s+(?:Umsatzsteuer|Mehrwertsteuer|USt|MwSt)|keine\s+(?:Umsatzsteuer|Mehrwertsteuer|USt|MwSt)|nicht\s+umsatzsteuerpflichtig)\b/i;
 const contradiction = /\b(?:nicht\s+ohne|(?:aber\s+)?nicht\s+im\s+(?:Namen|Auftrag)|aber\s+mit|doch\s+mit|(?:inkl\.?|inklusive|einschließlich)\s+(?:Umsatzsteuer|Mehrwertsteuer|MwSt|USt)|mit\s+\d{1,2}\s*%\s*(?:Umsatzsteuer|Mehrwertsteuer|MwSt|USt))\b/i;
 const anotherAmount = new RegExp(amount);
+const taxLanguage = /\b(?:Umsatzsteuer(?:pflichtig)?|Mehrwertsteuer|USt|MwSt)\b/i;
 
 export type SourceTaxEvidence = {
   label: string;
@@ -154,7 +155,7 @@ export function findTaxStatementMentions(lines: readonly SourceLine[]): SourceTa
     if (!match?.groups) return [];
     const {label, body, amount: printedAmount} = match.groups;
     if (!label || !body || !printedAmount ||
-      !/\b(?:Umsatzsteuer|Mehrwertsteuer|USt|MwSt)\b/i.test(body) ||
+      !taxLanguage.test(body) ||
       /\b\d+(?:[.,]\d+)?\s*[x×]\s*[-+]?\d+[.,]\d{2}\b/i.test(body)) return [];
     const amountCents = parseCents(printedAmount);
     return amountCents === null ? [] : [{
@@ -168,6 +169,6 @@ export function isTaxExplanationLine(text: string): boolean {
   const match = statement.exec(text.trim());
   if (!match?.groups?.body) return false;
   const body = match.groups.body;
-  return authority.test(body) && /\b(?:Umsatzsteuer|Mehrwertsteuer|USt|MwSt)\b/i.test(body) &&
+  return authority.test(body) && taxLanguage.test(body) &&
     !/\b\d+(?:[.,]\d+)?\s*[x×]\s*[-+]?\d+[.,]\d{2}\b/i.test(body);
 }
