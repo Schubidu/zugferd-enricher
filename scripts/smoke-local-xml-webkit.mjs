@@ -45,11 +45,11 @@ try {
   });
   await page.goto(origin + "/validation-smoke.html",{waitUntil:"load"});
   await page.waitForFunction(
-    () => typeof window.__validateCiiForSmokeTest === "function",null,{timeout:60_000},
+    () => typeof globalThis.__validateCiiForSmokeTest === "function",null,{timeout:60_000},
   );
 
   async function validate(xml) {
-    return page.evaluate(payload => window.__validateCiiForSmokeTest(payload),xml);
+    return page.evaluate(payload => globalThis.__validateCiiForSmokeTest(payload),xml);
   }
   const accepted = await validate(original);
   console.log("WEBKIT positive:",JSON.stringify(accepted));
