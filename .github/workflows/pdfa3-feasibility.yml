@@ -79,7 +79,7 @@ jobs:
       - name: Independent veraPDF PDF/A-3b positive and negative controls
         run: |
           set -euo pipefail
-          VALIDATOR="ghcr.io/verapdf/cli:v1.31.212"
+          VALIDATOR="docker.io/verapdf/cli:v1.30.4"
           docker run --rm -v "$RUNNER_TEMP:/data:ro" "$VALIDATOR" \
             --flavour 3b --format xml /data/converted-pdfa3.pdf \
             > "$RUNNER_TEMP/converted-verapdf.xml"
@@ -119,7 +119,7 @@ jobs:
       - name: Independently validate embedded PDF/A-3 and XML
         run: |
           set -euo pipefail
-          VALIDATOR="ghcr.io/verapdf/cli:v1.31.212"
+          VALIDATOR="docker.io/verapdf/cli:v1.30.4"
           docker run --rm -v "$RUNNER_TEMP:/data:ro" "$VALIDATOR" \
             --flavour 3b --format xml /data/derivative.pdf \
             > "$RUNNER_TEMP/derivative-verapdf.xml"
