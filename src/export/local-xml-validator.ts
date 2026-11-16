@@ -47,9 +47,21 @@ export function validateCiiXmlInBrowser(
     signal?.addEventListener("abort",abort,{once:true});
     worker.onerror = () =>
       finish({status:"unavailable",reason:"LOCAL_VALIDATION_WORKER_FAILED"});
-    worker.onmessage = (event: MessageEvent<{id: number; result: LocalXmlValidation}>) => {
+    worker.onmessage = (event: MessageEvent<
+      {id: number; result: LocalXmlValidation} | {id:number; progress:string}
+    >) => {
       const message = event.data;
       if (message?.id !== 1) {
+        finish({status:"unavailable",reason:"LOCAL_VALIDATION_INVALID_RESPONSE"});
+        return;
+      }
+      // Only the separately built CI smoke entry accepts diagnostic frames.
+      // They contain fixed technical stage names, never a PDF or XML value.
+      if ("progress" in message) {
+        if (import.meta.env.VITE_VALIDATOR_SMOKE === "1" && typeof message.progress === "string") {
+          console.info("[xml-smoke] " + message.progress);
+          return;
+        }
         finish({status:"unavailable",reason:"LOCAL_VALIDATION_INVALID_RESPONSE"});
         return;
       }
