@@ -138,8 +138,7 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
     if (isLabel) continue;
     // Evidence-only metadata and already printed payable sums are not charges.
     // They must never be counted as separate invoice positions in CII preparation.
-    if (/^\s*(?:Position\s+\d+\s+(?:USt-Kategorie|Einheit)|Zahlbetrag)\s*:/i.test(line.text) ||
-        /^\s*Position\s+\d+\s+(?:USt-Kategorie|Einheit)\s*:/i.test(line.text))
+    if (/^\s*(?:Position\s+\d+\s+(?:USt-Kategorie|Einheit)|Zahlbetrag)\s*:/i.test(line.text))
       continue;
     // Explicit invoice tax totals were handled above; exclude remaining tax summaries from positions.
     if (taxSummary.test(line.text)) continue;
