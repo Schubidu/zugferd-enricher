@@ -75,6 +75,16 @@ jobs:
           pdftotext -layout "$RUNNER_TEMP/original.pdf" "$RUNNER_TEMP/original.txt"
           pdftotext -layout "$RUNNER_TEMP/converted-pdfa3.pdf" "$RUNNER_TEMP/converted.txt"
           diff -u "$RUNNER_TEMP/original.txt" "$RUNNER_TEMP/converted.txt"
+          # Poppler provides an independent deterministic pixel oracle here.
+          # A text-only check misses drawings, text overlays, colors and logos.
+          pdftoppm -r 120 -f 1 -l 1 -singlefile \
+            "$RUNNER_TEMP/original.pdf" "$RUNNER_TEMP/original-render"
+          pdftoppm -r 120 -f 1 -l 1 -singlefile \
+            "$RUNNER_TEMP/converted-pdfa3.pdf" "$RUNNER_TEMP/converted-render"
+          cmp "$RUNNER_TEMP/original-render.ppm" "$RUNNER_TEMP/converted-render.ppm" || {
+            echo "::error::PDF/A-3 conversion changed rendered pixels of synthetic invoice"
+            exit 1
+          }
 
       - name: Independent veraPDF PDF/A-3b positive and negative controls
         run: |
@@ -138,4 +148,10 @@ jobs:
           cmp "$RUNNER_TEMP/synthetic-cii.xml" "$RUNNER_TEMP/extracted.xml"
           pdftotext -layout "$RUNNER_TEMP/derivative.pdf" "$RUNNER_TEMP/derivative.txt"
           diff -u "$RUNNER_TEMP/original.txt" "$RUNNER_TEMP/derivative.txt"
-          echo "Synthetic container mechanics passed; visual and real-invoice fidelity NOT proven."
+          pdftoppm -r 120 -f 1 -l 1 -singlefile \
+            "$RUNNER_TEMP/derivative.pdf" "$RUNNER_TEMP/derivative-render"
+          cmp "$RUNNER_TEMP/original-render.ppm" "$RUNNER_TEMP/derivative-render.ppm" || {
+            echo "::error::Embedding CII changed rendered pixels of synthetic invoice"
+            exit 1
+          }
+          echo "Synthetic PDF/A-3 and exact pixels passed; arbitrary invoice fidelity NOT proven."
