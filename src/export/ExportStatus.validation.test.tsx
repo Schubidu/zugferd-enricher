@@ -4,6 +4,7 @@ import { emptyFields } from "../invoice/model";
 import type { InvoiceDraft } from "../invoice/model";
 import { buildCiiCandidate } from "./cii-candidate";
 import { validateCiiXmlInBrowser } from "./local-xml-validator";
+import type { LocalXmlValidation } from "./local-xml-validator";
 import ExportStatus from "./ExportStatus";
 
 vi.mock("./preflight",() => ({
@@ -63,7 +64,7 @@ describe("evidence-gated and non-exporting local XML validation", () => {
       reviewed === replacement
         ? {status:"blocked",reasons:["SOURCE_CHANGED"]}
         : {status:"unvalidated",profile:"EN16931",xml:proof});
-    validate.mockImplementation(() => new Promise(() => {}));
+    validate.mockImplementation(() => new Promise<LocalXmlValidation>(() => {}));
     const {rerender} = render(<ExportStatus original={source} reviewed={source}/>);
     expect(validate).toHaveBeenCalledTimes(1);
     const signal = validate.mock.calls[0]![1]!;
