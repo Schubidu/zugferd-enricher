@@ -1,0 +1,44 @@
+name: Independent CII candidate validation
+
+on:
+  pull_request:
+    paths:
+      - "src/export/**"
+      - "src/invoice/**"
+      - ".github/workflows/cii-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-cii:
+    name: Mustangproject EN16931 check (synthetic only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm ci
+      - name: Create synthetic XML candidate from actual TypeScript renderer
+        run: |
+          CII_VALIDATION_OUTPUT="$RUNNER_TEMP/synthetic-cii.xml" \
+            npm run test -- src/export/cii-candidate.test.ts
+          test -s "$RUNNER_TEMP/synthetic-cii.xml"
+      - name: Obtain independent validator
+        run: |
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/Mustang-CLI.jar" \
+            https://repo.maven.apache.org/maven2/org/mustangproject/Mustang-CLI/2.26.0/Mustang-CLI-2.26.0.jar
+          sha256sum "$RUNNER_TEMP/Mustang-CLI.jar"
+      - name: Validate synthetic CII against ZUGFeRD rules
+        run: |
+          java -Xmx2g -jar "$RUNNER_TEMP/Mustang-CLI.jar" \
+            --action validate --source "$RUNNER_TEMP/synthetic-cii.xml" --disable-file-logging
