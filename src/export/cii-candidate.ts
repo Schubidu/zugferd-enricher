@@ -4,6 +4,7 @@ import { parseCents } from "../invoice/money";
 import { assessExportPreflight } from "./preflight";
 import { extractCiiSourceFacts } from "./cii-evidence";
 import type { CiiAddress, CiiFact } from "./cii-evidence";
+import { compareCiiXmlToSource } from "./xml-source-match";
 
 /**
  * Intermediate CII XML only. This has NOT passed official ZUGFeRD 2.5.2
@@ -259,6 +260,12 @@ export function buildCiiCandidate(original: InvoiceDraft, reviewed: InvoiceDraft
       "</ram:ApplicableHeaderTradeSettlement></rsm:SupplyChainTradeTransaction>" +
       "</rsm:CrossIndustryInvoice>";
 
+    // A valid XML schema is not evidence that the content matches the PDF.
+    // Independently re-read every mapped value from the serialized XML.
+    const comparison = compareCiiXmlToSource(xml, original);
+    if (comparison.status !== "matched-subset") {
+      return {status:"blocked",reasons:comparison.reasons.map(reason => "XML_SOURCE:" + reason)};
+    }
     return {status:"unvalidated",profile:"EN16931",xml};
   } catch {
     return {status:"blocked",reasons:["XML:illegal-source-character"]};
