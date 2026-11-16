@@ -72,7 +72,7 @@ describe("real bundled EN16931 offline validation engines", () => {
         "<ram:CalculatedAmount>30.41</ram:CalculatedAmount>","BR-CO-14"],
       ["<ram:LineTotalAmount>160.00</ram:LineTotalAmount>",
         "<ram:LineTotalAmount>150.00</ram:LineTotalAmount>","BR-CO-10"],
-    ]) {
+    ] as const) {
       expect(xml).toContain(from);
       const result = validateCiiXmlLocally(xml.replace(from,to),localResources());
       expect(result.status).toBe("invalid");
