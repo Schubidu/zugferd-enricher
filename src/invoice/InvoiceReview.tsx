@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { FieldKey, InvoiceDraft, SourceLine } from "./model";
-import { FIELD_KEYS, FIELD_LABELS, isSourceBackedNoVat } from "./model";
+import { FIELD_KEYS, FIELD_LABELS, isSourceBackedNet, isSourceBackedNoVat } from "./model";
 import { formatEuroCents, sumLineItemAmounts } from "./money";
 import PdfPreview from "./PdfPreview";
 import { CATEGORY_IDS, CATEGORY_LABELS, classifyDescription } from "./classify";
@@ -40,6 +40,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
     };
   }, [inspectedEvidence]);
   const positionSum = sumLineItemAmounts(draft.items);
+  const allNet = draft.items.length > 0 && draft.items.every(isSourceBackedNet);
   const categorySummary = summarizeCategories(draft.items, classifications);
   const findings = reconcileInvoice(draft);
   // These extraction warnings already have dedicated, actionable reconciliation tasks.
@@ -123,7 +124,8 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
     }
     onDraftChange({
       ...draft,
-      items: draft.items.map(item => item.id === id ? {...item, [key]: value, taxTreatment: undefined, origin: "manual"} : item),
+      items: draft.items.map(item => item.id === id ?
+        {...item, [key]: value, taxTreatment: undefined, amountBasis: undefined, origin: "manual"} : item),
     });
   }
   function sourceButton(lines: SourceLine[], ids: string[]) {
@@ -165,6 +167,11 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                         </button>
                       );
                     })
+                  ) : finding.id === "item-net-sum" ? (
+                    <button className="review-action" type="button"
+                      onClick={() => focusReviewSection("line-items-heading")}>
+                      Positionen prüfen
+                    </button>
                   ) : finding.id.startsWith("manual-item-") || finding.id.startsWith("quantity-") ? (
                     <button className="review-action" type="button"
                       onClick={() => focusReviewSection("line-item-" + finding.id.replace(/^(?:manual-item-|quantity-)/, ""), 'input[aria-label$=" Betrag"]')}>
@@ -233,7 +240,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
             </div>
           </section>
           <section className="data-card" aria-labelledby="line-items-heading">
-            <h3 id="line-items-heading">Rechnungspositionen</h3>
+            <h3 id="line-items-heading" tabIndex={-1}>Rechnungspositionen</h3>
             {draft.items.length === 0 ? <p className="quiet">Keine eindeutig strukturierten Positionen erkannt. Bitte Original prüfen.</p> : (
               <div className="line-items">
                 {draft.items.map((item, index) => {
@@ -257,7 +264,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                         value={item.description} onChange={event => updateItem(item.id,"description",event.currentTarget.value)}/>
                     </label>
                     <div className="line-item-values">
-                      <label>Betrag (Basis unbekannt)
+                      <label>Betrag {isSourceBackedNet(item) ? "(Netto)" : "(Basis unbekannt)"}
                         <input type="text" aria-label={"Position " + (index+1) + " Betrag"}
                           value={item.amount} onChange={event => updateItem(item.id,"amount",event.currentTarget.value)}/>
                       </label>
@@ -294,7 +301,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
               </div>
             )}
             <div className="position-sum" role="status" aria-live="polite">
-              <span className="position-sum-label">Summe der erkannten Positionen</span>
+              <span className="position-sum-label">{allNet ? "Summe der erkannten Netto-Positionen" : "Summe der erkannten Positionen"}</span>
               <strong className="position-sum-value">
                 {positionSum.totalCents === null
                   ? "Nicht berechenbar"
@@ -305,7 +312,8 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
                   {positionSum.invalidCount} Betragsangabe(n) sind ungültig oder unvollständig.
                 </p>
               )}
-              <p className="quiet">Kein automatischer Abgleich mit dem Rechnungsbetrag: Netto-/Bruttobasis nicht gesichert.</p>
+              {!allNet &&
+                <p className="quiet">Kein automatischer Abgleich mit dem Rechnungsbetrag: Netto-/Bruttobasis nicht gesichert.</p>}
             </div>
           </section>
           <details className="data-card category-overview">
