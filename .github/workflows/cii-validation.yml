@@ -42,9 +42,13 @@ jobs:
         run: |
           java -Xmx2g -jar "$RUNNER_TEMP/Mustang-CLI.jar" \
             --action validate --source "$RUNNER_TEMP/synthetic-cii.xml" \
-            --fail-on-warnings --disable-file-logging \
+            --disable-file-logging \
             | tee "$RUNNER_TEMP/valid-report.xml"
           grep -q '<summary status="valid"/>' "$RUNNER_TEMP/valid-report.xml"
+          if grep -q '<warning ' "$RUNNER_TEMP/valid-report.xml"; then
+            echo "::error::Independent validator reported XML warnings"
+            exit 1
+          fi
       - name: Prove independent validator rejects arithmetic corruption
         run: |
           sed 's/<ram:GrandTotalAmount>190.40</<ram:GrandTotalAmount>190.41</' \
@@ -52,7 +56,7 @@ jobs:
           ! cmp -s "$RUNNER_TEMP/synthetic-cii.xml" "$RUNNER_TEMP/invalid-cii.xml"
           if java -Xmx2g -jar "$RUNNER_TEMP/Mustang-CLI.jar" \
               --action validate --source "$RUNNER_TEMP/invalid-cii.xml" \
-              --fail-on-warnings --disable-file-logging; then
+              --disable-file-logging; then
             echo "::error::Validator accepted an intentionally corrupted grand total"
             exit 1
           fi
