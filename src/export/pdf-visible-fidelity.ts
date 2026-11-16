@@ -21,11 +21,17 @@ export async function comparePdfVisibleFidelity(
   derivative: PDFDocumentProxy,
   signal?: AbortSignal,
 ): Promise<PdfVisibleFidelity> {
+  const abort = () => {
+    if (signal?.aborted) throw new DOMException("PDF comparison cancelled","AbortError");
+  };
+  abort();
   const text = await comparePdfTextFidelity(original,derivative,signal);
+  abort();
   if (text.status === "mismatch") {
     return {status:"mismatch",stage:"text",reasons:text.reasons};
   }
   const render = await comparePdfRenderFidelity(original,derivative,signal);
+  abort();
   if (render.status === "mismatch") {
     return {status:"mismatch",stage:"render",reasons:render.reasons};
   }
