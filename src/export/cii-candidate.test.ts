@@ -3,6 +3,7 @@ import { recognizeInvoice } from "../invoice/recognize";
 import type { InvoiceDraft, SourceLine } from "../invoice/model";
 import { buildCiiCandidate } from "./cii-candidate";
 import { extractCiiSourceFacts } from "./cii-evidence";
+import { assessExportPreflight } from "./preflight";
 
 function invoice(lines: string[]): InvoiceDraft {
   const source: SourceLine[] = lines.map((text, row) => ({
@@ -52,6 +53,18 @@ describe("EN16931 internal CII XML preparation (never a certified export)", () =
     expect(original.items[0]?.description).toBe("Beratungsleistung & Audit");
     const facts = extractCiiSourceFacts(original);
     expect(facts.ok).toBe(true);
+    const preflight = assessExportPreflight(original, structuredClone(original));
+    expect(preflight.exportAllowed).toBe(false);
+    const codes = preflight.blockers.map(blocker => blocker.code);
+    expect(codes).not.toContain("CURRENCY_UNVERIFIED");
+    expect(codes).not.toContain("PARTY_ADDRESSES_UNVERIFIED");
+    expect(codes).not.toContain("INVOICE_TYPE_UNVERIFIED");
+    expect(codes).not.toContain("SELLER_TAX_IDENTIFIER_UNVERIFIED");
+    expect(codes).not.toContain("PAYABLE_AMOUNT_UNVERIFIED");
+    expect(codes).not.toContain("LINE_VAT_CATEGORY_UNVERIFIED");
+    expect(codes).toContain("SOURCE_LINE_COVERAGE_UNVERIFIED");
+    expect(codes).toContain("XML_SCHEMA_VALIDATION_PENDING");
+    expect(codes).toContain("PDFA3_VALIDATION_PENDING");
 
     const result = buildCiiCandidate(original, structuredClone(original));
     expect(result.status).toBe("unvalidated");
