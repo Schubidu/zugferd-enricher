@@ -45,6 +45,15 @@ function loadFromMemory(uri, baseUri = "") {
   if (found === undefined) throw new Error("Missing pinned stylesheet resource: " + leaf);
   return found;
 }
+// document() expects a document node, never a source string.
+// Otherwise code-list queries can produce XPTY0019 (atomic value / path).
+const documentCache = new Map();
+function loadXmlDocument(uri,baseUri) {
+  const text = loadFromMemory(uri,baseUri);
+  const name = basename(uri);
+  if (!documentCache.has(name)) documentCache.set(name,parseXml(text));
+  return documentCache.get(name);
+}
 const source = parseXml(input);
 const corrupted = parseXml(input.replace(
   "<ram:GrandTotalAmount>190.40</ram:GrandTotalAmount>",
@@ -60,12 +69,12 @@ for(const stylesheetName of rules) {
     parseXml,
     baseUri:"memory:///schematron/" + stylesheetName,
     loadStylesheet:loadFromMemory,
-    documentLoader:loadFromMemory,
+    documentLoader:loadXmlDocument,
   });
   const check = (document,label) => {
     const transformation = stylesheet.transform({
       source:document, dynamicEvaluation:false,
-      documentLoader:loadFromMemory,
+      documentLoader:loadXmlDocument,
     });
     const xml = serialize([transformation.principal].flat(),transformation.output);
     const report = parseXml(xml);
