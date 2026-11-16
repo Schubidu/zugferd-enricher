@@ -16,8 +16,12 @@ export type CiiCandidateResult =
 
 function xmlText(value: string): string {
   // XML 1.0 legal characters only; never silently remove illegal user/PDF data.
-  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/u.test(value))
-    throw new Error("Illegal XML 1.0 character in source");
+  for (const character of value) {
+    const scalar = character.codePointAt(0)!;
+    if ((scalar < 32 && scalar !== 9 && scalar !== 10 && scalar !== 13) ||
+      (scalar >= 0xD800 && scalar <= 0xDFFF) || scalar === 0xFFFE || scalar === 0xFFFF)
+      throw new Error("Illegal XML 1.0 character in source");
+  }
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;");
 }
