@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, webcrypto } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -19,13 +19,12 @@ describe("the bundled version-pinned FeRD validator resources", () => {
     const original = new Map(entries.map(([name]) => [
       name,readFileSync(resolve("public","validation","ferd-2.5.2",name)),
     ]));
-    const fetchMock = vi.fn(async (url: URL) => ({
+    const fetchMock = vi.fn(async (url: URL, _options?: RequestInit) => ({
       ok:true,
       arrayBuffer:async () => Uint8Array.from(original.get(url.pathname.split("/").pop()!)!).buffer,
     }));
-    const oldFetch = globalThis.fetch;
-    const oldSelf = globalThis.self;
-    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    vi.stubGlobal("crypto",webcrypto);
+    vi.stubGlobal("fetch",fetchMock);
     try {
       // jsdom has the same relative-location URL model as a web worker.
       const resources = await loadValidatorResources();
@@ -42,8 +41,7 @@ describe("the bundled version-pinned FeRD validator resources", () => {
         /Validation resource changed or unsupported/,
       );
     } finally {
-      globalThis.fetch = oldFetch;
-      globalThis.self = oldSelf;
+      vi.unstubAllGlobals();
     }
   });
 });
