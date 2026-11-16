@@ -17,12 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -37,8 +37,22 @@ jobs:
           curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
             --output "$RUNNER_TEMP/Mustang-CLI.jar" \
             https://repo.maven.apache.org/maven2/org/mustangproject/Mustang-CLI/2.26.0/Mustang-CLI-2.26.0.jar
-          sha256sum "$RUNNER_TEMP/Mustang-CLI.jar"
+          echo "42d7868cb68264874a7b8cab4c3587b03b23ccc7cd72373da917f66758bb9736  $RUNNER_TEMP/Mustang-CLI.jar" | sha256sum --check --status
       - name: Validate synthetic CII against ZUGFeRD rules
         run: |
           java -Xmx2g -jar "$RUNNER_TEMP/Mustang-CLI.jar" \
-            --action validate --source "$RUNNER_TEMP/synthetic-cii.xml" --disable-file-logging
+            --action validate --source "$RUNNER_TEMP/synthetic-cii.xml" \
+            --fail-on-warnings --disable-file-logging \
+            | tee "$RUNNER_TEMP/valid-report.xml"
+          grep -q '<summary status="valid"/>' "$RUNNER_TEMP/valid-report.xml"
+      - name: Prove independent validator rejects arithmetic corruption
+        run: |
+          sed 's/<ram:GrandTotalAmount>190.40</<ram:GrandTotalAmount>190.41</' \
+            "$RUNNER_TEMP/synthetic-cii.xml" > "$RUNNER_TEMP/invalid-cii.xml"
+          ! cmp -s "$RUNNER_TEMP/synthetic-cii.xml" "$RUNNER_TEMP/invalid-cii.xml"
+          if java -Xmx2g -jar "$RUNNER_TEMP/Mustang-CLI.jar" \
+              --action validate --source "$RUNNER_TEMP/invalid-cii.xml" \
+              --fail-on-warnings --disable-file-logging; then
+            echo "::error::Validator accepted an intentionally corrupted grand total"
+            exit 1
+          fi
