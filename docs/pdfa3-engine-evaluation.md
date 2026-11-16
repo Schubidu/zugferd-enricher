@@ -31,3 +31,24 @@ Sources: readme/official project pages checked 2026-11-16. Claims are not accept
 - Only then add a fully independently validated XML attachment, XMP mapping and source-to-XML content fidelity, with a single fail-closed export release decision.
 
 This document is an **evaluation record**, not an engine commitment and not proof of PDF/A-3 support.
+
+## Reproducible CI experiment (2026-11-16)
+
+**Result: synthetic-only container mechanics confirmed; browser support not confirmed.**
+
+`.github/workflows/pdfa3-feasibility.yml` creates a deterministic one-page text PDF with `scripts/make_synthetic_pdf.py` and produces the independently tested CII XML from the real TypeScript candidate builder. No invoice from an external issuer is used.
+
+1. Ghostscript in the isolated GitHub runner converts the synthetic input to PDF/A-3b with a supplied sRGB ICC output intent and `-dPDFACompatibilityPolicy=2`, which aborts conversion on unsupported PDF/A constructs. The ICC profile is explicitly permitted for reading under Ghostscript's safety sandbox.
+2. Independent **veraPDF 1.30.4** (Docker image `docker.io/verapdf/cli@sha256:f085855d442ad415e79fabbabcdd1803c2db4ee097cd5b94506c95ecdcfa1728`) validates the PDF/A-3b input. It also **rejects the original non-archival PDF** as a negative control.
+3. Mustangproject CLI **2.26.0** (HTTPS + pinned SHA-256 jar) embeds the independently validated EN16931 CII into the PDF/A-3 using `--action combine --format zf --version 2 --profile E`. The output is validated again with veraPDF 3b and Mustang (both PDF and XML statuses must be valid).
+4. The XML is extracted again and compared **byte-for-byte** with the generated XML; Poppler's page text extraction must be equal before and after converting and embedding.
+
+The first passing proof run is [PDF/A-3 feasibility #43839771612](https://github.com/Schubidu/zugferd-enricher/actions/runs/43839771612); the pinned-image rerun is separately required for reproducibility.
+
+**Limits:** This is a *CI experiment*, not a runtime implementation. Ghostscript is **AGPL-3.0**, invoked only as a separate development-time test tool, **not** bundled in the MIT app. Neither the Java Mustang CLI nor Docker veraPDF runs in the user's browser. A successful veraPDF result does not prove that an **arbitrary supplier invoice** was faithfully converted: real source fonts, colors, transparency, forms, annotations, images and page rendering still need independent visible-output checks. The synthetic PDF is only one page; exact equality of its extracted text does not prove pixel or semantic source completeness. No e-invoice is downloadable from the app.
+
+### Next decisions
+
+- **Rendering/conversion engine:** Demonstrate a browser/WASM PDF/A-3b conversion of existing invoices, with suitable open-source/redistribution licence. Never assume the CI-only Ghostscript pipeline is an acceptable client implementation.
+- **FeRD resources:** Acquire the official version 2.5.2 EN16931 validation bundle under its download conditions. Test the exact XSD/Schematron packages locally and against Mustang's CI oracle on both valid and corrupted XML.
+- **Acceptance on original five PDFs:** Run source PDFs unchanged through the same page/text evidence path, plus pixel/raster comparisons and independent PDF/A/embedded XML checks. Source content must match structured XML with no invented addresses, amounts, splits or tax codes.
