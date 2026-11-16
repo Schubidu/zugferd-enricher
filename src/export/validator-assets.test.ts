@@ -19,10 +19,13 @@ describe("the bundled version-pinned FeRD validator resources", () => {
     const original = new Map(entries.map(([name]) => [
       name,readFileSync(resolve("public","validation","ferd-2.5.2",name)),
     ]));
-    const fetchMock = vi.fn(async (url: URL, _options?: RequestInit) => ({
-      ok:true,
-      arrayBuffer:async () => Uint8Array.from(original.get(url.pathname.split("/").pop()!)!).buffer,
-    }));
+    const fetchMock = vi.fn(async (url: URL, options?: RequestInit) => {
+      expect(options?.mode).toBe("same-origin");
+      return {
+        ok:true,
+        arrayBuffer:async () => Uint8Array.from(original.get(url.pathname.split("/").pop()!)!).buffer,
+      };
+    });
     vi.stubGlobal("crypto",webcrypto);
     vi.stubGlobal("fetch",fetchMock);
     try {
