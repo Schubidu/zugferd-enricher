@@ -336,4 +336,36 @@ describe("position sum in the browser invoice review", () => {
     expect(details).toHaveAttribute("open");
     expect(screen.getByRole("table")).toHaveTextContent("Kurtaxe / Beherbergungssteuer");
   });
+
+  it("shows source-backed net amounts without repeating the unknown-basis disclaimer", () => {
+    const base: InvoiceDraft = {
+      ...initialDraft,
+      fields: {
+        ...emptyFields(),
+        netTotal:{value:"100,00",origin:"pdf",evidenceIds:["net"]},
+        taxTotal:{value:"19,00",origin:"pdf",evidenceIds:["vat"]},
+        grossTotal:{value:"119,00",origin:"pdf",evidenceIds:["gross"]},
+      },
+      items:[{
+        id:"source-item",description:"Beratungsleistung",quantity:"1",unitPrice:"100,00",
+        amount:"100,00",taxRate:"19%",origin:"pdf",evidenceIds:["item"],
+        amountBasis:{kind:"net",origin:"pdf",evidenceIds:["header"]},
+      }],
+    };
+    function LocalHarness() {
+      const [current,setCurrent] = useState(base);
+      return <InvoiceReview pdf={pdf} draft={current} onDraftChange={setCurrent}/>;
+    }
+    render(<LocalHarness />);
+    expect(screen.getByText("Betrag (Netto)")).toBeInTheDocument();
+    expect(screen.getByText("Summe der erkannten Netto-Positionen")).toBeInTheDocument();
+    expect(screen.queryByText(/Kein automatischer Abgleich mit dem Rechnungsbetrag/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox",{name:"Position 1 Betrag"}), {
+      target:{value:"101,00"},
+    });
+    expect(screen.getByText("Betrag (Basis unbekannt)")).toBeInTheDocument();
+    expect(screen.getByText("Summe der erkannten Positionen")).toBeInTheDocument();
+    expect(screen.getByText(/Kein automatischer Abgleich mit dem Rechnungsbetrag/)).toBeInTheDocument();
+  });
+
 });
