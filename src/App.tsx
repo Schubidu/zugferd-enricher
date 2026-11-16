@@ -129,9 +129,9 @@ function App() {
               </svg>
             </div>
           )}
-          <h2>{loaded ? "Ausgewählte Rechnung" : "Wähle deine Rechnung"}</h2>
+          {!loaded && <h2>Wähle deine Rechnung</h2>}
           {!loaded && <p>PDF hier ablegen oder eine Datei auswählen</p>}
-          <label className="file-button" htmlFor="invoice-pdf">{loaded ? "Andere PDF auswählen" : "PDF auswählen"}</label>
+          {!loaded && <label className="file-button" htmlFor="invoice-pdf">PDF auswählen</label>}
           <input
             ref={inputRef}
             className="file-input"
@@ -139,9 +139,10 @@ function App() {
             type="file"
             accept=".pdf,application/pdf"
             onChange={handleInput}
-            aria-describedby="upload-help"
+            aria-describedby={loaded ? undefined : "upload-help"}
+            aria-label={loaded ? "PDF wechseln" : undefined}
           />
-          <p id="upload-help" className="upload-hint">PDF · bis 50 MB · keine Übertragung an einen Server</p>
+          {!loaded && <p id="upload-help" className="upload-hint">PDF · bis 50 MB · keine Übertragung an einen Server</p>}
           {error && <p className="error" role="alert">{error}</p>}
           {selectedFile && (
             <div className="selected-file" role="status">
@@ -149,9 +150,12 @@ function App() {
                 <strong>{selectedFile.name}</strong>
                 <span>{formatFileSize(selectedFile.size)} · lokal ausgewählt</span>
               </div>
-              <button type="button" className="reset-button" onClick={resetSelection}>
-                Entfernen
-              </button>
+              <div className="selected-file-actions">
+                {loaded && <label className="file-button" htmlFor="invoice-pdf">Wechseln</label>}
+                <button type="button" className="reset-button" onClick={resetSelection}>
+                  Entfernen
+                </button>
+              </div>
             </div>
           )}
           {selectedFile && !loaded && (
