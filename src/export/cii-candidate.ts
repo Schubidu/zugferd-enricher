@@ -177,6 +177,8 @@ export function buildCiiCandidate(original: InvoiceDraft, reviewed: InvoiceDraft
   }
 
   const facts = extracted.facts;
+  const deliveryDate = sourceDate(facts.deliveryDate.value);
+  if (!deliveryDate) return {status:"blocked",reasons:["EVIDENCE:deliveryDate"]};
   const payable = valueCents(facts.payable.value);
   // Never guess due payable from invoice gross: partial payments may exist.
   if (payable === null || payable !== gross) {
@@ -238,6 +240,11 @@ export function buildCiiCandidate(original: InvoiceDraft, reviewed: InvoiceDraft
       partyXml("Seller",sellerName,facts.seller,facts.seller.vatId) +
       partyXml("Buyer",buyerName,facts.buyer) +
       "</ram:ApplicableHeaderTradeAgreement>" +
+      "<ram:ApplicableHeaderTradeDelivery><ram:ActualDeliverySupplyChainEvent>" +
+      '<ram:OccurrenceDateTime><udt:DateTimeString format="102">' +
+      deliveryDate +
+      "</udt:DateTimeString></ram:OccurrenceDateTime>" +
+      "</ram:ActualDeliverySupplyChainEvent></ram:ApplicableHeaderTradeDelivery>" +
       "<ram:ApplicableHeaderTradeSettlement>" +
       tag("InvoiceCurrencyCode",facts.currency.value) + xmlGroups +
       optionalDueDate +
