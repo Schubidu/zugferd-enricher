@@ -121,6 +121,7 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
       "Buyer: Musterwerk Analytics UG",
       "Rechnungsnummer: HAM-2026-315",
       "Rechnungsdatum: 15.11.2026",
+      "LEISTUNG - MENGE x EINZELPREIS = POSITION NETTO - UST",
       "Logis 12.11.2026 1 x 105,00 105,00 7%",
       "Logis 13.11.2026 1 x 125,00 125,00 7%",
       "Logis 14.11.2026 1 x 118,00 118,00 7%",
@@ -137,6 +138,7 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
     ]])));
     try {
       expect(result.draft.items).toHaveLength(7);
+      expect(result.draft.items.every(item => item.amountBasis?.kind === "net")).toBe(true);
       expect(result.draft.items.filter(x => x.description === "Kurtaxe")).toHaveLength(1);
       expect(result.draft.items.find(x => x.description === "Kurtaxe")?.taxTreatment?.kind)
         .toBe("third_party_no_vat");
@@ -151,6 +153,7 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
   it("keeps TEST-04's unknown bundle VAT status as the only arithmetic review action", async () => {
     const result = await loadInvoicePdf(fakeLocalPdf(makePdf([[
       "Rechnungsnummer: SAF-2026-802",
+      "LEISTUNG / ARTIKEL - MENGE x EINZELPREIS = NETTOBETRAG - UST",
       "Logis 1 x 99,00 99,00 7%",
       "Logis 1 x 129,00 129,00 7%",
       "Logis 1 x 149,00 149,00 7%",
@@ -158,6 +161,7 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
       "Logis 1 x 119,00 119,00 7%",
     ],[
       "Rechnungsnummer: SAF-2026-802",
+      "LEISTUNG / ARTIKEL - MENGE x EINZELPREIS = NETTOBETRAG - UST",
       "Food 1 x 85,00 85,00 7%",
       "Dinner 1 x 28,00 28,00 7%",
       "Lunch 1 x 48,00 48,00 7%",
@@ -167,6 +171,7 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
       "WLAN 1 x 10,00 10,00 19%",
     ],[
       "Rechnungsnummer: SAF-2026-802",
+      "LEISTUNG / ARTIKEL - MENGE x EINZELPREIS = NETTOBETRAG - UST",
       "Business Paket 1 x 29,00 29,00",
       "USt 7% Netto 766,00 Steuer 53,62",
       "USt 19% Netto 143,00 Steuer 27,17",
@@ -176,6 +181,7 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
     ]])));
     try {
       expect(result.draft.items).toHaveLength(13);
+      expect(result.draft.items.every(item => item.amountBasis?.kind === "net")).toBe(true);
       expect(result.draft.items.find(item => item.description === "Business Paket")?.taxRate).toBeNull();
       expect(result.draft.fields.invoiceNumber?.value).toBe("SAF-2026-802");
       expect(sumLineItemAmounts(result.draft.items).totalCents).toBe(90900n);
