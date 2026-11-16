@@ -126,22 +126,27 @@ h1 span { color: #47749c; }
 }
 
 .position-sum {
-  display: grid;
-  gap: 7px;
-  padding: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  padding: 13px 0 0;
   margin-top: 16px;
-  border-top: 2px solid #9cb3cb;
-  border-radius: 8px;
-  background: #f1f5fa;
+  border-top: 1px solid #dce4ed;
 }
-.position-sum-label { font-size: .91rem; font-weight: 700; color: #274562; }
-.position-sum-value { font-size: 1.5rem; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.position-sum-label { font-size: .88rem; font-weight: 650; color: #274562; }
+.position-sum-value { font-size: 1.18rem; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.position-sum .quiet, .position-sum-error { flex-basis: 100%; font-size: .78rem; }
 .position-sum .quiet { margin: 0; }
 .position-sum-error { margin: 0; color: #8a2930; font-size: .85rem; }
 
 .category-field { display: grid; gap: 5px; margin-top: 12px; font-size: .82rem; font-weight: 650; }
 .category-field select { min-height: 44px; width: 100%; border: 1px solid #b2c2d4; border-radius: 8px; background: #fff; color: #152238; padding: 8px 10px; }
-.category-origin { color: #53677b; font-size: .78rem; margin: 5px 0; }
+.category-origin { color: #53677b; font-size: .76rem; display: inline-block; margin: 4px 0 0; }
+.category-overview summary { cursor: pointer; font-size: 1rem; font-weight: 650; min-height: 44px; display: flex; align-items: center; }
+.category-overview[open] .category-summary-scroll { margin-top: 8px; }
+.line-item-meta { color: #506477; font-size: .8rem; font-weight: 400; }
+.field-meta:empty { display: none; }
 .source-tax-treatment { display: grid; align-content: start; gap: 5px; min-width: 0; font-size: .82rem; color: #334c64; }
 .source-tax-treatment .evidence-link, .source-tax-treatment .review-action { justify-self: start; }
 .reconciliation-findings { padding: 0; list-style: none; margin: 14px 0 0; display: grid; gap: 9px; }
@@ -219,25 +224,25 @@ h1 span { color: #47749c; }
   .evidence-dialog .pdf-scroll { max-height: calc(100dvh - 190px); }
 }
 
-/* Export preparation is a compact disclosure, not an unsupported export CTA. */
+/* Export is a secondary capability, intentionally below the invoice review. */
 .export-status {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: start;
-  gap: 10px 20px;
-  padding: 16px 0;
-  margin-top: 12px;
-  border-bottom: 1px solid #dce4ed;
+  padding: 10px 0;
+  margin: -32px 0 24px;
+  border-top: 1px solid #dce4ed;
 }
-.export-status-intro { flex: 1 1 360px; min-width: 0; }
-.export-status-intro h2 { margin: 0 0 4px; font-size: 1rem; line-height: 1.3; }
-.export-status-intro p { margin: 0; color: #516478; font-size: .85rem; line-height: 1.5; }
-.export-status-details { flex: 0 1 100%; font-size: .86rem; }
-.export-status-details summary { cursor: pointer; color: #1a507c; font-weight: 650; min-height: 44px; display: inline-flex; align-items: center; }
-.export-status-breakdown { margin-top: 7px; display: grid; gap: 15px; }
+.export-status-details { font-size: .85rem; }
+.export-status-details summary {
+  cursor: pointer;
+  color: #1a507c;
+  font-weight: 650;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.export-status-details summary span { font-weight: 400; color: #617184; margin-left: 4px; }
+.export-status-breakdown { display: grid; gap: 10px; padding: 4px 0 16px; }
 .export-status-breakdown > div { max-width: 850px; }
-.export-status-breakdown h3 { margin: 0 0 6px; font-size: .92rem; }
-.export-status-breakdown ul { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
-.export-status-breakdown li, .export-status-breakdown p { line-height: 1.5; }
-.export-status-breakdown p { margin: 6px 0 0; color: #516478; }
+.export-status-breakdown h3 { margin: 0 0 5px; font-size: .9rem; }
+.export-status-breakdown ul { margin: 0; padding-left: 22px; display: grid; gap: 5px; }
+.export-status-breakdown li, .export-status-breakdown p { margin: 0; line-height: 1.5; }
+.export-status-breakdown p { color: #516478; }
