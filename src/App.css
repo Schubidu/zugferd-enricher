@@ -26,10 +26,17 @@ h1 span { color: #47749c; }
 .lead { font-size: clamp(1rem, 2.4vw, 1.15rem); max-width: 660px; color: #576779; line-height: 1.7; margin: 22px auto 34px; }
 .hero--reviewing { padding: 14px 0 0; text-align: left; max-width: none; }
 .hero--reviewing h1 { font-size: 1.25rem; letter-spacing: -.02em; margin-bottom: 10px; }
-.hero--reviewing .upload-panel { padding: 14px 18px; border: 1px solid #cad6e4; border-radius: 12px; box-shadow: none; }
-.hero--reviewing .upload-panel > p { margin: 6px 0; }
-.hero--reviewing .selected-file { margin-top: 10px; padding: 10px 12px; }
-.hero--reviewing .file-button { margin-top: 10px; }
+.hero--reviewing .upload-panel { padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.hero--reviewing .selected-file { margin-top: 0; padding: 9px 12px; background: #fff; border-color: #dae3ed; }
+.hero--reviewing .selected-file-details span { color: #647388; }
+.hero--reviewing .file-button {
+  background: #fff; color: #1d416c; border: 1px solid #a4bacb;
+  font-size: .84rem; font-weight: 650; border-radius: 8px; padding: 8px 12px;
+}
+.hero--reviewing .file-button:hover { background: #f1f5fa; }
+.selected-file-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.selected-file-actions .reset-button { font-size: .84rem; background: transparent; border-color: #dae3ed; color: #4c5e72; }
+.selected-file-actions .reset-button:hover { background: #f1f5fa; }
 .upload-panel { position: relative; background: white; border: 2px dashed #cad6e4; border-radius: 22px; padding: 34px 24px 30px; box-shadow: 0 12px 42px rgba(28, 53, 88, .045); }
 .file-mark { color: #5177a6; margin: 0 auto 13px; }
 .upload-panel h2 { font-size: 1.2rem; margin: 0 0 7px; letter-spacing: -.02em; }
@@ -55,6 +62,9 @@ h1 span { color: #47749c; }
   .upload-panel { padding: 28px 17px; }
   .footer { flex-direction: column; }
   .selected-file { flex-direction: column; align-items: stretch; }
+  .hero--reviewing .selected-file { gap: 8px; }
+  .hero--reviewing .selected-file-actions { justify-content: flex-start; }
+  .hero--reviewing .file-button, .hero--reviewing .reset-button { min-width: 110px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; }
