@@ -27,7 +27,7 @@ describe("secondary export status disclosure", () => {
     const source = invoice();
     render(<ExportStatus original={source} reviewed={structuredClone(source)}/>);
     expect(screen.getByRole("region",{name:"ZUGFeRD-Export"})).toBeInTheDocument();
-    expect(screen.getByText("noch nicht verfügbar")).toBeInTheDocument();
+    expect(screen.getByText(/noch nicht verfügbar/)).toBeInTheDocument();
     const summary = screen.getByText(/ZUGFeRD-Export/);
     const disclosure = summary.closest("details");
     expect(disclosure).not.toHaveAttribute("open");
