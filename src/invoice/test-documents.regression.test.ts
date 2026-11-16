@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { recognizeInvoice } from "./recognize";
 import { reconcileInvoice } from "./reconcile";
 import { parseCents, sumLineItemAmounts } from "./money";
+import { buildCiiCandidate } from "../export/cii-candidate";
 import type { SourceLine } from "./model";
 
 /**
@@ -167,6 +168,10 @@ describe("five original synthetic test documents (source-backed regression)", ()
           kind:"third_party_no_vat", origin:"pdf",
         });
       }
+      // Good invoice analysis is not evidence of EN16931 export readiness.
+      // None of the five original fixtures contains the mandatory complete
+      // party addresses, currency/type codes and per-line VAT categories.
+      expect(buildCiiCandidate(draft, structuredClone(draft)).status).toBe("blocked");
     });
   }
 });
