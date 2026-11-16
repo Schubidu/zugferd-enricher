@@ -70,7 +70,7 @@ describe("cancelling a local extraction", () => {
     render(<App />);
     selectAndRead();
     await waitFor(() => expect(screen.getByTestId("invoice-review")).toBeInTheDocument());
-    expect(screen.getByRole("heading", {name:"ZUGFeRD-Verarbeitungskopie"})).toBeInTheDocument();
+    expect(screen.getByRole("region", {name:"ZUGFeRD-Export"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Ausgewählte Rechnung"})).toBeInTheDocument();
     expect(screen.getByText("first.pdf")).toBeInTheDocument();
     expect(screen.queryByText(/Rechnungspositionen und Beträge auslesen/i)).not.toBeInTheDocument();
