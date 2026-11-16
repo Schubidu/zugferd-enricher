@@ -44,8 +44,8 @@ describe("asynchronous category suggestions", () => {
     expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("parking");
     rerender(<InvoiceReview pdf={secondPdf} draft={changedDraft} onDraftChange={vi.fn()} />);
     expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("city_tax");
-    expect(screen.getByRole("table")).toHaveTextContent("15,00 €");
-    expect(screen.getByRole("table")).not.toHaveTextContent("Parken");
+    expect(screen.getByRole("table",{hidden:true})).toHaveTextContent("15,00 €");
+    expect(screen.getByRole("table",{hidden:true})).not.toHaveTextContent("Parken");
   });
 
   it("aborts in-flight inference when the PDF object is replaced", async () => {
@@ -69,7 +69,7 @@ describe("asynchronous category suggestions", () => {
     }} onDraftChange={vi.fn()} />);
     expect(activeSignal?.aborted).toBe(true);
     expect(screen.getByRole("combobox",{name:"Position 1 Kategorie"})).toHaveValue("beverage");
-    expect(screen.getByRole("table")).toHaveTextContent("15,00 €");
+    expect(screen.getByRole("table",{hidden:true})).toHaveTextContent("15,00 €");
   });
 
   it("aborts stale inference when the description changes and keeps the new category", async () => {
@@ -96,8 +96,8 @@ describe("asynchronous category suggestions", () => {
     });
     expect(requestSignal?.aborted).toBe(true);
     expect(screen.getByRole("combobox", {name:"Position 1 Kategorie"})).toHaveValue("city_tax");
-    expect(screen.getByRole("table")).toHaveTextContent("Kurtaxe / Beherbergungssteuer");
-    expect(screen.getByRole("table")).toHaveTextContent("20,00 €");
+    expect(screen.getByRole("table",{hidden:true})).toHaveTextContent("Kurtaxe / Beherbergungssteuer");
+    expect(screen.getByRole("table",{hidden:true})).toHaveTextContent("20,00 €");
     expect(screen.queryByRole("button", {name:"Positionen lokal klassifizieren"})).not.toBeInTheDocument();
   });
 
