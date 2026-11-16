@@ -35,7 +35,7 @@ jobs:
       - name: Build CI-only entry with the actual production worker bundle
         run: |
           set -euo pipefail
-          VALIDATOR_WEBKIT_SMOKE=1 npm run build
+          VITE_VALIDATOR_SMOKE=1 VALIDATOR_WEBKIT_SMOKE=1 npm run build
           test -s dist/validation-smoke.html
           test -s dist/index.html
       - name: Test browser-local XSD and Schematron against valid and tampered invoice
