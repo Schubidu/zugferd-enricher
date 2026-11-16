@@ -9,6 +9,12 @@ export const FIELD_KEYS = [
 export type FieldKey = (typeof FIELD_KEYS)[number];
 export type FieldValue = { value: string; evidenceIds: string[]; origin: "pdf" | "manual" };
 export type InvoiceFields = Record<FieldKey, FieldValue | null>;
+/** Invoice wording with PDF evidence, never an inferred 0% VAT rate. */
+export type TaxTreatment = {
+  kind: "third_party_no_vat";
+  origin: "pdf";
+  evidenceIds: string[];
+};
 export type LineItem = {
   id: string;
   description: string;
@@ -16,9 +22,17 @@ export type LineItem = {
   unitPrice: string | null;
   amount: string;
   taxRate: string | null;
+  taxTreatment?: TaxTreatment;
   evidenceIds: string[];
   origin: "pdf" | "manual";
 };
+/** Deliberately narrower than recognizing an internal invoice category. */
+export function isSourceBackedNoVat(item: LineItem): boolean {
+  return item.origin === "pdf" && item.taxRate === null &&
+    item.taxTreatment?.kind === "third_party_no_vat" &&
+    item.taxTreatment.origin === "pdf" &&
+    item.taxTreatment.evidenceIds.length > 0;
+}
 export type TaxGroup = { rate: string; net: string; tax: string; evidenceIds: string[] };
 export type InvoiceDraft = {
   pageCount: number;

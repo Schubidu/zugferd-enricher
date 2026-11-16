@@ -6,7 +6,9 @@ describe("invoice selection screen", () => {
   it("states that data stays local and downstream work is not yet available", () => {
     render(<App />);
     expect(screen.getByText(/keine Übertragung an einen Server/i)).toBeInTheDocument();
-    expect(screen.getByText(/folgen in den nächsten Issues/i)).toBeInTheDocument();
+    expect(screen.getByText(/OCR für gescannte PDFs und der ZUGFeRD-Export sind noch nicht verfügbar/i)).toBeInTheDocument();
+    expect(screen.queryByRole("region",{name:"Geplanter Ablauf"})).not.toBeInTheDocument();
+    expect(screen.queryByText(/LOCAL-FIRST/)).not.toBeInTheDocument();
   });
 
   it("selects a PDF locally, shows the name and can remove it without a network request", () => {

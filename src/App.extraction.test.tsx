@@ -2,8 +2,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { loadInvoicePdf } from "./invoice/pdf";
+import type { LoadedInvoice } from "./invoice/pdf";
+import { emptyFields } from "./invoice/model";
 
 vi.mock("./invoice/pdf", () => ({loadInvoicePdf: vi.fn()}));
+vi.mock("./invoice/InvoiceReview", () => ({default: () => <section data-testid="invoice-review" />}));
 
 const read = vi.mocked(loadInvoicePdf);
 
@@ -55,5 +58,26 @@ describe("cancelling a local extraction", () => {
     await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
     view.unmount();
     expect(signal?.aborted).toBe(true);
+  });
+
+  it("reduces the introduction after extraction but retains accessible file switching", async () => {
+    const destroy = vi.fn();
+    read.mockResolvedValueOnce({
+      pdf: {numPages: 1, loadingTask: {destroy}},
+      draft: {pageCount: 1, sourceLines: [], fields: emptyFields(), items: [], taxGroups: [], warnings: []},
+    } as unknown as LoadedInvoice);
+    render(<App />);
+    selectAndRead();
+    await waitFor(() => expect(screen.getByTestId("invoice-review")).toBeInTheDocument());
+    expect(screen.getByRole("heading", {name: "Ausgewählte Rechnung"})).toBeInTheDocument();
+    expect(screen.getByText("first.pdf")).toBeInTheDocument();
+    expect(screen.queryByText(/Rechnungspositionen und Beträge auslesen/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/OCR für gescannte PDFs/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {name: "PDF lokal auslesen"})).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Andere PDF auswählen")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", {name: "Entfernen"}));
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId("invoice-review")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", {name: "Wähle deine Rechnung"})).toBeInTheDocument();
   });
 });

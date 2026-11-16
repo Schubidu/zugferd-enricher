@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { SourceLine } from "./model";
 import { recognizeInvoice } from "./recognize";
-import { checkTotals, parseCents } from "./money";
+import { checkTotals, parseCents, sumLineItemAmounts } from "./money";
+import { reconcileInvoice } from "./reconcile";
 
 function pageLines(page: number, entries: string[]): SourceLine[] {
   return entries.map((text, index) => ({
@@ -178,6 +179,133 @@ describe("source-based invoice recognition", () => {
     ]), 1);
     expect(draft.items.map(item => item.description)).toEqual(["Service","Kurtaxe"]);
     expect(draft.taxGroups).toEqual([]);
+  });
+
+
+  it("links the TEST-05 no-VAT Kurtaxe statement to the exact printed line", () => {
+    const draft = recognizeInvoice(pageLines(1, [
+      "Rechnungsaussteller: Hotel Am Markt Test GmbH",
+      "Rechnungsempfänger: Musterwerk Analytics UG",
+      "Rechnungsnummer: HAM-2026-315",
+      "Rechnungsdatum: 15.11.2026",
+      "Logis 12.11.2026 1 x 105,00 105,00 7%",
+      "Logis 13.11.2026 1 x 125,00 125,00 7%",
+      "Logis 14.11.2026 1 x 118,00 118,00 7%",
+      "Frühstück Speisen 3 x 14,00 42,00 7%",
+      "Frühstück Getränke 3 x 5,00 15,00 19%",
+      "Parken 2 x 8,00 16,00 19%",
+      "Kurtaxe 3 x 3,50 10,50",
+      "Summe der Positionen 431,50",
+      "USt 7% Netto 390,00 Steuer 27,30",
+      "USt 19% Netto 31,00 Steuer 5,89",
+      "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 10,50",
+      "Nettosumme 431,50",
+      "Umsatzsteuer gesamt 33,19",
+      "Gesamtbetrag 464,69",
+    ]), 1);
+    expect(draft.items).toHaveLength(7);
+    expect(sumLineItemAmounts(draft.items).totalCents).toBe(43150n);
+    const kurtaxe = draft.items.find(item => item.description === "Kurtaxe");
+    expect(kurtaxe).toMatchObject({
+      quantity:"3", unitPrice:"3,50", amount:"10,50", taxRate:null,
+      taxTreatment:{kind:"third_party_no_vat",origin:"pdf",evidenceIds:["p1-14"]},
+    });
+    expect(draft.taxGroups.map(group => group.net)).toEqual(["390,00","31,00"]);
+    expect(draft.fields.taxTotal?.value).toBe("33,19");
+    expect(draft.fields.grossTotal?.value).toBe("464,69");
+    expect(reconcileInvoice(draft)).toEqual([]);
+    expect(draft.warnings).not.toEqual(expect.arrayContaining([expect.stringMatching(/keinen belegten Steuersatz/i)]));
+  });
+
+  it("does not infer no-VAT tax status from the word Kurtaxe alone or a conflicting note", () => {
+    const description = "Kurtaxe 3 x 3,50 10,50";
+    const exactNote = "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 10,50";
+    const none = recognizeInvoice(pageLines(1,[description]),1);
+    const wrongAmount = recognizeInvoice(pageLines(1,[
+      description,
+      "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 10,00",
+    ]),1);
+    const ambiguous = recognizeInvoice(pageLines(1,[description,exactNote,exactNote]),1);
+    for (const draft of [none,ambiguous]) {
+      expect(draft.items).toHaveLength(1);
+      expect(draft.items[0]?.taxTreatment).toBeUndefined();
+      expect(draft.items[0]?.taxRate).toBeNull();
+      expect(reconcileInvoice(draft)).toEqual(expect.arrayContaining([
+        expect.objectContaining({id:"missing-tax-rates",severity:"review"}),
+      ]));
+    }
+    // A non-matching explanatory-looking amount must not silently disappear:
+    // it might be a second charge, so preserve it for human/source review.
+    expect(wrongAmount.items).toHaveLength(2);
+    expect(wrongAmount.items.every(item => item.taxRate === null && !item.taxTreatment)).toBe(true);
+  });
+
+
+  it("uses the independent local source-line model for alternate wording, without writing a 0% tax rate", () => {
+    const draft = recognizeInvoice(pageLines(1,[
+      "Ortstaxe 2 x 3,00 6,00",
+      "Ortstaxe im Namen der Stadt, keine Mehrwertsteuer: 6,00",
+      "Gesamtbetrag 6,00",
+    ]), 1);
+    expect(draft.items).toHaveLength(1);
+    expect(draft.items[0]).toMatchObject({
+      description: "Ortstaxe", amount: "6,00", taxRate: null,
+      taxTreatment: {kind: "third_party_no_vat", origin: "pdf", evidenceIds: ["p1-1"]},
+    });
+    expect(reconcileInvoice(draft).some(f => f.id === "missing-tax-rates")).toBe(false);
+  });
+
+  it("abstains for contradictory statements and prevents duplicate source rows", () => {
+    const draft = recognizeInvoice(pageLines(1,[
+      "Kurtaxe 3 x 3,50 10,50",
+      "Kurtaxe im Namen der Gemeinde mit 19% Umsatzsteuer: 10,50",
+      "Gesamtbetrag 10,50",
+    ]), 1);
+    expect(draft.items).toHaveLength(1);
+    expect(draft.items[0]?.taxTreatment).toBeUndefined();
+    expect(reconcileInvoice(draft).some(f => f.id === "missing-tax-rates")).toBe(true);
+  });
+
+
+  it("rejects no-VAT status if a second source statement contradicts the supported note", () => {
+    const draft = recognizeInvoice(pageLines(1, [
+      "Kurtaxe 3 x 3,50 10,50",
+      "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 10,50",
+      "Kurtaxe im Namen der Gemeinde mit 19% Umsatzsteuer: 10,50",
+      "Gesamtbetrag 10,50",
+    ]), 1);
+    expect(draft.items).toHaveLength(1); // Both are annotations of the same printed charge.
+    expect(draft.items[0]?.amount).toBe("10,50");
+    expect(draft.items[0]?.taxTreatment).toBeUndefined();
+    expect(reconcileInvoice(draft).some(f => f.id === "missing-tax-rates")).toBe(true);
+  });
+
+  it("does not assign no-VAT from a self-contradictory Mehrwertsteuer statement", () => {
+    const draft = recognizeInvoice(pageLines(1, [
+      "Kurtaxe 3 x 3,50 10,50",
+      "Kurtaxe im Namen der Gemeinde, ohne Umsatzsteuer, mit 19% Mehrwertsteuer: 10,50",
+    ]), 1);
+    expect(draft.items).toHaveLength(1);
+    expect(draft.items[0]?.taxTreatment).toBeUndefined();
+    expect(draft.items[0]?.taxRate).toBeNull();
+  });
+
+  it("keeps standalone or ambiguous charge rows instead of discarding VAT-labelled Kurtaxe", () => {
+    const standalone = recognizeInvoice(pageLines(1,[
+      "Kurtaxe (inkl. Umsatzsteuer) 10,50",
+    ]),1);
+    expect(standalone.items).toHaveLength(1);
+    expect(standalone.items[0]).toMatchObject({
+      description:"Kurtaxe (inkl. Umsatzsteuer)", amount:"10,50", taxRate:null,
+    });
+    expect(reconcileInvoice(standalone).some(f => f.id === "missing-tax-rates")).toBe(true);
+
+    const standaloneAuthority = recognizeInvoice(pageLines(1, [
+      "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 10,50",
+    ]),1);
+    expect(standaloneAuthority.items).toHaveLength(1);
+    expect(standaloneAuthority.items[0]?.taxTreatment).toBeUndefined();
+    expect(standaloneAuthority.items[0]?.amount).toBe("10,50");
   });
 
 });
