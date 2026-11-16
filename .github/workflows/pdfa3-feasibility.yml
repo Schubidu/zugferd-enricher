@@ -65,6 +65,7 @@ jobs:
           Path(os.environ["RUNNER_TEMP"], "PDFA_ci_def.ps").write_text(updated)
           PY
           gs -dPDFA=3 -dBATCH -dNOPAUSE -dNOOUTERSAVE \
+            --permit-file-read="$PROFILE" \
             -dPDFACompatibilityPolicy=2 -sColorConversionStrategy=RGB \
             -sDEVICE=pdfwrite \
             -sOutputFile="$RUNNER_TEMP/converted-pdfa3.pdf" \
@@ -78,7 +79,7 @@ jobs:
       - name: Independent veraPDF PDF/A-3b positive and negative controls
         run: |
           set -euo pipefail
-          VALIDATOR="ghcr.io/verapdf/cli@sha256:de5843855864e20b2ffffe8aab9336810725468eecf06dccdc15df7a43527ef2"
+          VALIDATOR="ghcr.io/verapdf/cli:v1.31.212"
           docker run --rm -v "$RUNNER_TEMP:/data:ro" "$VALIDATOR" \
             --flavour 3b --format xml /data/converted-pdfa3.pdf \
             > "$RUNNER_TEMP/converted-verapdf.xml"
@@ -118,7 +119,7 @@ jobs:
       - name: Independently validate embedded PDF/A-3 and XML
         run: |
           set -euo pipefail
-          VALIDATOR="ghcr.io/verapdf/cli@sha256:de5843855864e20b2ffffe8aab9336810725468eecf06dccdc15df7a43527ef2"
+          VALIDATOR="ghcr.io/verapdf/cli:v1.31.212"
           docker run --rm -v "$RUNNER_TEMP:/data:ro" "$VALIDATOR" \
             --flavour 3b --format xml /data/derivative.pdf \
             > "$RUNNER_TEMP/derivative-verapdf.xml"
