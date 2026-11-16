@@ -94,8 +94,9 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
   function focusReviewSection(id: string, selector = "input, select, button") {
     const target = document.getElementById(id);
     target?.scrollIntoView?.({behavior: "smooth", block: "center"});
-    const input = target?.querySelector<HTMLInputElement>(selector);
-    input?.focus({preventScroll: true});
+    const input = target?.querySelector<HTMLElement>(selector);
+    if (input) input.focus({preventScroll: true});
+    else if (target instanceof HTMLElement) target.focus({preventScroll: true});
   }
   function updateField(key: FieldKey, value: string) {
     const old = draft.fields[key];
@@ -202,7 +203,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
         />
         <div className="invoice-data">
           <section className="data-card" aria-labelledby="invoice-fields-heading">
-            <h3 id="invoice-fields-heading">Rechnungsangaben</h3>
+            <h3 id="invoice-fields-heading" tabIndex={-1}>Rechnungsangaben</h3>
             <div className="field-grid">
               {FIELD_KEYS.map(key => {
                 const field = draft.fields[key];
@@ -360,7 +361,7 @@ export default function InvoiceReview({pdf, draft, onDraftChange}: Props) {
             </p>
           </section>
           <section className="data-card" aria-labelledby="tax-groups-heading">
-            <h3 id="tax-groups-heading">Ausgewiesene Steuergruppen</h3>
+            <h3 id="tax-groups-heading" tabIndex={-1}>Ausgewiesene Steuergruppen</h3>
             {draft.taxGroups.length === 0 ? <p className="quiet">Keine eindeutig ausgewiesenen Steuergruppen erkannt.</p> : (
               <div className="tax-groups">
                 {draft.taxGroups.map((group, index) => (
