@@ -12,9 +12,10 @@ vi.mock("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url", async () => {
 import { loadInvoicePdf } from "./pdf";
 import { sumLineItemAmounts } from "./money";
 import { reconcileInvoice } from "./reconcile";
+import { comparePdfTextFidelity } from "../export/pdf-text-fidelity";
 
 /** Synthetic, fully in-memory PDFs; never add real customer invoices to this repository. */
-function makePdf(pages: string[][]): Uint8Array {
+function makePdf(pages: string[][], xOffset = 50): Uint8Array {
   const encoder = new TextEncoder();
   const pageIds = pages.map((_, i) => 4 + 2*i);
   const objects: string[] = [
@@ -26,7 +27,7 @@ function makePdf(pages: string[][]): Uint8Array {
     const contentId = 5 + 2*index;
     const stream = lines.map((line, i) => {
       const safe = line.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-      return "BT /F1 12 Tf 50 " + (740-24*i) + " Td (" + safe + ") Tj ET\n";
+      return "BT /F1 12 Tf " + xOffset + " " + (740-24*i) + " Td (" + safe + ") Tj ET\n";
     }).join("");
     objects.push(
       "<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 3 0 R >> >> /MediaBox [0 0 612 792] /Contents " + contentId + " 0 R >>",
@@ -190,4 +191,69 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
       await result.pdf.loadingTask.destroy();
     }
   });
+
+  it("checks the original and a prospective derivative for identical PDF text and geometry", async () => {
+    const bytes = makePdf([
+      ["Rechnungsnummer: F-001","Logis 2 x 100,00 200,00 7%"],
+      ["USt 7% Netto 200,00 Steuer 14,00","Gesamtbetrag 214,00"],
+    ]);
+    const original = await loadInvoicePdf(fakeLocalPdf(bytes));
+    const derivative = await loadInvoicePdf(fakeLocalPdf(bytes));
+    try {
+      await expect(comparePdfTextFidelity(original.pdf,derivative.pdf)).resolves.toEqual({
+        status:"matched-text-layout",pages:2,
+      });
+    } finally {
+      await original.pdf.loadingTask.destroy();
+      await derivative.pdf.loadingTask.destroy();
+    }
+  });
+
+  it("detects changed amounts and moved text even when PDFs otherwise look similar", async () => {
+    const source = makePdf([["Service 2 x 100,00 200,00 19%"]]);
+    const differentMoney = makePdf([["Service 2 x 100,00 210,00 19%"]]);
+    const movedText = makePdf([["Service 2 x 100,00 200,00 19%"]], 60);
+    const original = await loadInvoicePdf(fakeLocalPdf(source));
+    const incorrect = await loadInvoicePdf(fakeLocalPdf(differentMoney));
+    const shifted = await loadInvoicePdf(fakeLocalPdf(movedText));
+    try {
+      const amount = await comparePdfTextFidelity(original.pdf,incorrect.pdf);
+      expect(amount).toEqual({status:"mismatch",reasons:[{page:1,code:"TEXT_CHANGED"}]});
+      const position = await comparePdfTextFidelity(original.pdf,shifted.pdf);
+      expect(position).toEqual({status:"mismatch",reasons:[{page:1,code:"TEXT_LAYOUT_CHANGED"}]});
+    } finally {
+      await original.pdf.loadingTask.destroy();
+      await incorrect.pdf.loadingTask.destroy();
+      await shifted.pdf.loadingTask.destroy();
+    }
+  });
+
+  it("refuses missing or unextractable pages instead of claiming visual fidelity", async () => {
+    const first = await loadInvoicePdf(fakeLocalPdf(makePdf([["Rechnung 100,00"]])));
+    const twoPages = await loadInvoicePdf(fakeLocalPdf(makePdf([["Rechnung 100,00"],["Seite 2"]])));
+    const unreadable = await loadInvoicePdf(fakeLocalPdf(makePdf([[]])));
+    try {
+      expect(await comparePdfTextFidelity(first.pdf,twoPages.pdf))
+        .toEqual({status:"mismatch",reasons:[{page:null,code:"PAGE_COUNT"}]});
+      expect(await comparePdfTextFidelity(unreadable.pdf,unreadable.pdf))
+        .toEqual({status:"mismatch",reasons:[{page:1,code:"TEXT_MISSING"}]});
+    } finally {
+      await first.pdf.loadingTask.destroy();
+      await twoPages.pdf.loadingTask.destroy();
+      await unreadable.pdf.loadingTask.destroy();
+    }
+  });
+
+  it("cancels PDF parity work before opening pages", async () => {
+    const original = await loadInvoicePdf(fakeLocalPdf(makePdf([["Rechnung 100,00"]])));
+    try {
+      const controller = new AbortController();
+      controller.abort();
+      await expect(comparePdfTextFidelity(original.pdf,original.pdf,controller.signal))
+        .rejects.toMatchObject({name:"AbortError"});
+    } finally {
+      await original.pdf.loadingTask.destroy();
+    }
+  });
+
 });
