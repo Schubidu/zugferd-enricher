@@ -100,7 +100,9 @@ export function buildCiiCandidate(original: InvoiceDraft, reviewed: InvoiceDraft
   const extracted = extractCiiSourceFacts(original);
   if (!extracted.ok) reasons.push(...extracted.missing.map(key => "EVIDENCE:" + key));
 
-  const invoiceNumber = simpleEvidenceName(original, "issuer") ? original.fields.invoiceNumber : null;
+  const invoiceNumber = original.fields.invoiceNumber?.origin === "pdf" &&
+    original.fields.invoiceNumber.evidenceIds.length > 0
+    ? original.fields.invoiceNumber : null;
   const sellerName = simpleEvidenceName(original, "issuer");
   const buyerName = simpleEvidenceName(original, "recipient");
   if (!sellerName) reasons.push("EVIDENCE:issuer");
