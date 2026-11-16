@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@tradik/xslt3": "1.0.0",
-    "@xmldom/xmldom": "0.9.8",
+    "@xmldom/xmldom": "0.9.12",
     "libxml2-wasm": "0.7.2",
     "pdfjs-dist": "6.5.438",
     "react": "^19.2.0",
