@@ -139,8 +139,11 @@ the invalid total generated **BR-CO-15 and BR-CO-16** in both.
    parties and dates must be backed by original PDF evidence. No invention
    of missing invoice facts, and no speculative classification as export truth.
 5. Only a complete, independent, fail-closed release gate can enable a
-   downloadable derivative. The visible app and
-   `assessExportPreflight().exportAllowed` intentionally remain unchanged
-   and **false**.
+   downloadable derivative. `ExportStatus` now runs the local XML Worker
+   **only when** a source-backed CII candidate can be built; incomplete source
+   invoices do not initialize the Worker. The disclosure shows one concise
+   outcome when validation completes, with no change to the default compact
+   layout. Pending validation is aborted when the reviewed data changes.
+   `assessExportPreflight().exportAllowed` remains **false**.
 
 **Passing XSD plus Schematron is not permission to export a ZUGFeRD PDF/A-3.**
