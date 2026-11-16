@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import InvoiceReview from "./invoice/InvoiceReview";
+import ExportStatus from "./export/ExportStatus";
 import type { LoadedInvoice } from "./invoice/pdf";
 import type { ChangeEvent, DragEvent } from "react";
 import { formatFileSize, validatePdfSelection } from "./pdf-selection";
@@ -170,12 +171,15 @@ function App() {
       </section>
 
       {loaded && (
-        <InvoiceReview
-          key={generation.current}
-          pdf={loaded.pdf}
-          draft={loaded.draft}
-          onDraftChange={draft => setLoaded(current => current ? {...current, draft} : current)}
-        />
+        <>
+          <ExportStatus original={loaded.originalDraft} reviewed={loaded.draft} />
+          <InvoiceReview
+            key={generation.current}
+            pdf={loaded.pdf}
+            draft={loaded.draft}
+            onDraftChange={draft => setLoaded(current => current ? {...current, draft} : current)}
+          />
+        </>
       )}
 
       <footer className="footer">
