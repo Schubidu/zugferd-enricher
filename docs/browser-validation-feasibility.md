@@ -1,7 +1,10 @@
 # Browser-local EN16931 validation feasibility
 
-**Status:** proof of a viable open-source execution engine on synthetic CII data;
-**not yet bundled into the production browser app** and **not export approval**.
+**Status (2026-11-16):** both open-source validators, the pinned rule files and a
+cancellable one-shot Worker are now **bundled into the browser application**.
+The real Vite production Worker passes synthetic positive and negative tests
+in WebKit 26 and **WebKit 27.2**. This is **XML-only** validation, not export
+approval or proof of browser PDF/A-3 conversion.
 
 ## Goal and constraints
 
@@ -31,7 +34,8 @@ commit the 29 MB specification archive or any PDF sample invoice.
 
 `.github/workflows/browser-xsd-feasibility.yml` runs
 `scripts/probe-browser-xsd.mjs` with **libxml2-wasm 0.7.2**, MIT-licensed,
-installed for this job only (no production dependency).
+temporarily installed for its isolated feasibility job. The application
+now also pins the same version in its lockfile.
 
 1. Collect all **four** independently versioned EN16931 XSD files.
 2. Check every relative `schemaLocation` resolves to an in-memory resource;
@@ -53,7 +57,8 @@ on a GitHub Linux runner. These are **not Safari or iPhone metrics**.
 
 `.github/workflows/browser-schematron-feasibility.yml` runs
 `scripts/probe-browser-schematron.mjs` with **@tradik/xslt3 1.0.0**,
-BSD-3-Clause, also installed only for the test job.
+BSD-3-Clause. Its feasibility workflow uses a temporary installation;
+the same exact version is now also pinned in the application lockfile.
 
 - Both untouched official XSLT files execute with an in-memory-only stylesheet
   and XML document resolver: `EN16931-CII-validation.xslt` (CEN rules) and
@@ -74,30 +79,68 @@ First successful execution of **both** rule sets:
 The valid sample fired **58 CEN** and **62 Factur-X** rules with zero failures;
 the invalid total generated **BR-CO-15 and BR-CO-16** in both.
 
-## Not yet satisfied
+## Integrated local runtime (PR #13)
 
-The product has deliberately **not** added these libraries to `package.json`,
-the lockfile, Vite or the release bundle. The test runner's temporary npm
-installs and JAR extraction are not runtime features.
+- Exact pinned dependencies: `libxml2-wasm@0.7.2` (MIT),
+  `@tradik/xslt3@1.0.0` (BSD-3-Clause) and patched
+  `@xmldom/xmldom@0.9.12`. The earlier 0.9.8 release was blocked by a
+  high-severity advisory and was not retained.
+- **Seven official technical resources** (four XSD, two Schematron XSLT and
+  one Factur-X codelist) are packaged inside
+  `public/validation/ferd-2.5.2/` with SHA-256 values pinned in
+  `src/export/validator-assets.ts` and the FeRD licensing notice. These
+  files originate from the checksum-verified Mustangproject 2.26.0 reference
+  bundle. No invoice content is ever sent to a validator API.
+- `loadValidatorResources()` retrieves only the seven **same-origin** files,
+  rejects redirects and external URLs, size-bounds them and verifies SHA-256
+  before any rule execution. Actual XSD imports, XSLT imports and codelist
+  document lookups are served from memory-only resolvers.
+- The public API `validateCiiXmlInBrowser()` invokes a disposable Web Worker.
+  It supports cancellation, a 30-second fail-closed timeout and error
+  handling; Worker memory is released by terminating it on completion.
+  The expensive WebAssembly engine is **dynamically imported** inside the
+  Worker after its rule files are verified. Vite emits the Worker in
+  **ES module format** because libxml2-wasm requires top-level await.
+- `src/export/local-xml-engine.test.ts`, `validator-assets.test.ts` and
+  `local-xml-validator.test.ts` test genuine synthetic EN16931 validation,
+  rejected document/line/tax mutations, unsafe XML, missing resources, hash
+  mismatch, Worker failure, timeout and cancellation.
+- `validation-smoke.html` is an explicitly **CI-only** second Vite HTML entry
+  selected by `VALIDATOR_WEBKIT_SMOKE=1`; it is not included in the
+  ordinary production build. It tests the real compiled Worker, not the
+  Vite development server (which previously reloaded during dynamic imports).
+  The smoke enforces same-origin requests and tests a valid synthetic CII,
+  a manipulated invoice total and DTD rejection.
+- **Real WebKit tests passed** in [WebKit 26 / lazy-import fix
+  #43945662397](https://github.com/Schubidu/zugferd-enricher/actions/runs/43945662397)
+  and [WebKit 27.2 / Playwright 1.65.1
+  #43946277945](https://github.com/Schubidu/zugferd-enricher/actions/runs/43946277945).
+  The positive sample validates against XSD and both official Schematron
+  profiles; the negative sample fails with BR-CO-15 and BR-CO-16. All HTTP
+  traffic is constrained to the local Vite origin. These are Linux-based
+  WebKit tests, **not** direct iPhone/Safari measurements.
 
-Before integration:
-1. Independently verify the **official FeRD release files** and notices against
-   the pinned Mustang-derived test set; ship only the necessary, hashed
-   EN16931 XSD, XSLT and codelist resources **inside** the Vite application.
-   No runtime fetching from GitHub, a public CDN or Maven Central.
-2. Add exact pinned dependencies and lockfile; run the two engines in a
-   dedicated Worker with a defined memory budget and cancellation, and fail
-   closed if any resource/engine initialization fails. No server-side fallback.
-3. Extend the **same** positive/negative corpus across the local engines and
-   the independent Mustang oracle: source VAT categories, mixed rates, municipal
-   pass-through, discounts, rounding, invoice dates, unsigned/duplicate schema
-   resources, and attacks involving external entities or remote `document()`.
-4. Verify Safari/iPhone initialization, repeated run memory and end-to-end
-   offline operation. Do not assume successful Node/WebAssembly execution
-   guarantees Safari behavior.
-5. Independently validate the final PDF/A-3 derivative and the **complete
-   original PDF vs embedded XML**, including rendered graphics and all lines.
+## Remaining acceptance gates
 
-`assessExportPreflight().exportAllowed` remains deliberately `false`.
-Neither XSD success nor Schematron success is permission to generate an
-unverified ZUGFeRD processing copy.
+1. Verify the exact official FeRD release distribution and preserve all
+   required attributions. Keep the independent Mustang parity oracle and
+   expand the regression corpus to cover mixed-rate invoices, discounts,
+   special municipal charges, bad codelists, invalid dates and adversarial
+   XML constructs. All unrecognised cases must fail closed.
+2. Independently measure **real iPhone/Safari** startup, repeat-run memory,
+   cancellation and offline behavior. The WebKit 27.2 Linux test is necessary
+   but cannot substitute for this device acceptance.
+3. Select and licence-verify a **browser-local PDF/A-3 converter**, without
+   bundling the AGPL Ghostscript proof-of-concept into the MIT app. Preserve
+   text and rendered visual content and independently verify the output with
+   veraPDF-class PDF/A-3 checks.
+4. Establish **complete PDF original vs embedded-XML content fidelity**:
+   all visible amounts, invoice positions, VAT categories, tax groups,
+   parties and dates must be backed by original PDF evidence. No invention
+   of missing invoice facts, and no speculative classification as export truth.
+5. Only a complete, independent, fail-closed release gate can enable a
+   downloadable derivative. The visible app and
+   `assessExportPreflight().exportAllowed` intentionally remain unchanged
+   and **false**.
+
+**Passing XSD plus Schematron is not permission to export a ZUGFeRD PDF/A-3.**
