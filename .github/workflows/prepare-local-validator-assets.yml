@@ -23,7 +23,7 @@ jobs:
       - name: Prepare locked browser validator dependencies
         run: |
           set -euo pipefail
-          npm install --save-exact --ignore-scripts libxml2-wasm@0.7.2 @tradik/xslt3@1.0.0 @xmldom/xmldom@0.9.8
+          npm install --save-exact --ignore-scripts libxml2-wasm@0.7.2 @tradik/xslt3@1.0.0 @xmldom/xmldom@0.9.12
           npm ci
           mkdir -p "$RUNNER_TEMP/browser-validator-bundle"
           cp package.json package-lock.json "$RUNNER_TEMP/browser-validator-bundle/"
