@@ -62,6 +62,12 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
     try {
       expect(result.pdf.numPages).toBe(2);
       expect(result.draft.fields.invoiceNumber?.value).toBe("H-2026-014");
+      expect(result.originalDraft).toEqual(result.draft);
+      expect(result.originalDraft).not.toBe(result.draft);
+      expect(result.originalDraft.sourceLines).not.toBe(result.draft.sourceLines);
+      result.draft.fields.invoiceNumber!.value = "MANUAL-CHANGE";
+      expect(result.originalDraft.fields.invoiceNumber?.value).toBe("H-2026-014");
+      expect(result.originalDraft.items[0]?.amount).toBe("200,00");
       expect(result.draft.fields.grossTotal?.value).toBe("243,75");
       expect(result.draft.items.map(x => x.taxRate)).toEqual(["7%", "19%"]);
       expect(result.draft.sourceLines.some(x => x.page === 2)).toBe(true);
