@@ -15,6 +15,12 @@ export type TaxTreatment = {
   origin: "pdf";
   evidenceIds: string[];
 };
+/** Basis is explicit in a PDF table heading; never infer it from a tax rate. */
+export type LineAmountBasis = {
+  kind: "net";
+  origin: "pdf";
+  evidenceIds: string[];
+};
 export type LineItem = {
   id: string;
   description: string;
@@ -23,6 +29,7 @@ export type LineItem = {
   amount: string;
   taxRate: string | null;
   taxTreatment?: TaxTreatment;
+  amountBasis?: LineAmountBasis;
   evidenceIds: string[];
   origin: "pdf" | "manual";
 };
@@ -32,6 +39,10 @@ export function isSourceBackedNoVat(item: LineItem): boolean {
     item.taxTreatment?.kind === "third_party_no_vat" &&
     item.taxTreatment.origin === "pdf" &&
     item.taxTreatment.evidenceIds.length > 0;
+}
+export function isSourceBackedNet(item: LineItem): boolean {
+  return item.origin === "pdf" && item.amountBasis?.kind === "net" &&
+    item.amountBasis.origin === "pdf" && item.amountBasis.evidenceIds.length > 0;
 }
 export type TaxGroup = { rate: string; net: string; tax: string; evidenceIds: string[] };
 export type InvoiceDraft = {
