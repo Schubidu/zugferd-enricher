@@ -7,6 +7,8 @@
  * stylesheet compilation or a blank SVRL as certified rule validation.
  */
 import assert from "node:assert/strict";
+import console from "node:console";
+import process from "node:process";
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { performance } from "node:perf_hooks";
