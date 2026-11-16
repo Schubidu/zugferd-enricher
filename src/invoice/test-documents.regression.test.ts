@@ -29,6 +29,7 @@ const docs = [
     pages: [[
       ...shared("Nordlicht Digital GmbH","Beispiel Büroservice UG","ND-2026-001"),
       "Fälligkeitsdatum: 29.11.2026",
+      "LEISTUNG / ARTIKEL · MENGE x EINZELPREIS = NETTOBETRAG · UST",
       "Beratungsleistung 2 x 80,00 160,00 19%",
       "USt 19% Netto 160,00 Steuer 30,40",
       "Nettosumme 160,00",
@@ -46,12 +47,14 @@ const docs = [
       "Invoice number: APT-2026-047",
       "Invoice date: November 15, 2026",
       "Due date: November 29, 2026",
+      "LEISTUNG / ARTIKEL · MENGE x EINZELPREIS = NETTOBETRAG · UST",
       "Designhandbuch Band A 2 x 24,00 48,00 7%",
       "Fachbuch UI Patterns 1 x 56,00 56,00 7%",
       "Monitorhalterung 2 x 75,00 150,00 19%",
       "Installation vor Ort 3 x 64,00 192,00 19%",
     ],[
       "Rechnungsnummer: APT-2026-047",
+      "LEISTUNG / ARTIKEL · MENGE x EINZELPREIS = NETTOBETRAG · UST",
       "USB-C Hub 1 x 60,00 60,00 19%",
       "Dokumentenmappe 4 x 17,00 68,00 19%",
       "USt 7% Netto 104,00 Steuer 7,28",
@@ -68,6 +71,7 @@ const docs = [
     pages: [[
       ...shared("Hotel Am Wiesenpark GmbH","Beispiel Beratung GmbH","HAW-2026-118"),
       "Fälligkeitsdatum: 22.11.2026",
+      "LEISTUNG / ARTIKEL · MENGE x EINZELPREIS = NETTOBETRAG · UST",
       "Logis 2 x 115,00 230,00 7%",
       "Frühstücksbuffet Speisen 2 x 18,00 36,00 7%",
       "Tiefgarage 2 x 12,00 24,00 19%",
@@ -86,6 +90,7 @@ const docs = [
     pages: [[
       ...shared("Stadthotel Am Forum GmbH","Beispiel Software Solutions AG","SAF-2026-802"),
       "Fälligkeitsdatum: 30.11.2026",
+      "LEISTUNG / ARTIKEL · MENGE x EINZELPREIS = NETTOBETRAG · UST",
       "Logis 10.11.2026 1 x 99,00 99,00 7%",
       "Logis 11.11.2026 1 x 129,00 129,00 7%",
       "Logis 12.11.2026 1 x 149,00 149,00 7%",
@@ -93,6 +98,7 @@ const docs = [
       "Logis 14.11.2026 1 x 119,00 119,00 7%",
     ],[
       "Rechnungsnummer: SAF-2026-802",
+      "LEISTUNG / ARTIKEL · MENGE x EINZELPREIS = NETTOBETRAG · UST",
       "Frühstück Speisen 5 x 17,00 85,00 7%",
       "Abendessen Speisen 1 x 28,00 28,00 7%",
       "Konferenzlunch 2 x 24,00 48,00 7%",
@@ -102,6 +108,7 @@ const docs = [
       "WLAN Premium 1 x 10,00 10,00 19%",
     ],[
       "Rechnungsnummer: SAF-2026-802",
+      "LEISTUNG / ARTIKEL · MENGE x EINZELPREIS = NETTOBETRAG · UST",
       "Business Paket 1 x 29,00 29,00",
       "USt 7% Netto 766,00 Steuer 53,62",
       "USt 19% Netto 143,00 Steuer 27,17",
@@ -117,6 +124,7 @@ const docs = [
     pages: [[
       ...shared("Hotel Am Markt Test GmbH","Musterwerk Analytics UG","HAM-2026-315"),
       "Fälligkeitsdatum: 29.11.2026",
+      "LEISTUNG · MENGE x EINZELPREIS = POSITION NETTO · UST",
       "Logis 12.11.2026 1 x 105,00 105,00 7%",
       "Logis 13.11.2026 1 x 125,00 125,00 7%",
       "Logis 14.11.2026 1 x 118,00 118,00 7%",
@@ -145,6 +153,8 @@ describe("five original synthetic test documents (source-backed regression)", ()
       expect(draft.fields.taxTotal?.value).toBe(doc.tax);
       expect(draft.fields.grossTotal?.value).toBe(doc.gross);
       expect(draft.items).toHaveLength(doc.count);
+      expect(draft.items.every(item => item.amountBasis?.kind === "net")).toBe(true);
+      expect(draft.items.every(item => item.amountBasis?.evidenceIds.length === 1)).toBe(true);
       expect(draft.taxGroups).toHaveLength(doc.taxGroups);
       expect(sumLineItemAmounts(draft.items).totalCents).toBe(parseCents(doc.net));
       const actual = reconcileInvoice(draft).map(f => f.id);
