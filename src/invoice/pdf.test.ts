@@ -10,6 +10,8 @@ vi.mock("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url", async () => {
   };
 });
 import { loadInvoicePdf } from "./pdf";
+import { sumLineItemAmounts } from "./money";
+import { reconcileInvoice } from "./reconcile";
 
 /** Synthetic, fully in-memory PDFs; never add real customer invoices to this repository. */
 function makePdf(pages: string[][]): Uint8Array {
@@ -112,4 +114,74 @@ describe("PDF.js extraction integration with synthetic source PDFs", () => {
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
   });
 
+
+  it("reads a TEST-05-like Kurtaxe source note end-to-end through PDF.js", async () => {
+    const result = await loadInvoicePdf(fakeLocalPdf(makePdf([[
+      "Rechnungsaussteller: Hotel Am Markt Test GmbH",
+      "Buyer: Musterwerk Analytics UG",
+      "Rechnungsnummer: HAM-2026-315",
+      "Rechnungsdatum: 15.11.2026",
+      "Logis 12.11.2026 1 x 105,00 105,00 7%",
+      "Logis 13.11.2026 1 x 125,00 125,00 7%",
+      "Logis 14.11.2026 1 x 118,00 118,00 7%",
+      "Breakfast Speisen 3 x 14,00 42,00 7%",
+      "Breakfast Drinks 3 x 5,00 15,00 19%",
+      "Parken 2 x 8,00 16,00 19%",
+      "Kurtaxe 3 x 3,50 10,50",
+      "USt 7% Netto 390,00 Steuer 27,30",
+      "USt 19% Netto 31,00 Steuer 5,89",
+      "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 10,50",
+      "Nettosumme 431,50",
+      "Umsatzsteuer gesamt 33,19",
+      "Gesamtbetrag 464,69",
+    ]])));
+    try {
+      expect(result.draft.items).toHaveLength(7);
+      expect(result.draft.items.filter(x => x.description === "Kurtaxe")).toHaveLength(1);
+      expect(result.draft.items.find(x => x.description === "Kurtaxe")?.taxTreatment?.kind)
+        .toBe("third_party_no_vat");
+      expect(sumLineItemAmounts(result.draft.items).totalCents).toBe(43150n);
+      expect(result.draft.fields.grossTotal?.value).toBe("464,69");
+      expect(reconcileInvoice(result.draft)).toEqual([]);
+    } finally {
+      await result.pdf.loadingTask.destroy();
+    }
+  });
+
+  it("keeps TEST-04's unknown bundle VAT status as the only arithmetic review action", async () => {
+    const result = await loadInvoicePdf(fakeLocalPdf(makePdf([[
+      "Rechnungsnummer: SAF-2026-802",
+      "Logis 1 x 99,00 99,00 7%",
+      "Logis 1 x 129,00 129,00 7%",
+      "Logis 1 x 149,00 149,00 7%",
+      "Logis 1 x 109,00 109,00 7%",
+      "Logis 1 x 119,00 119,00 7%",
+    ],[
+      "Rechnungsnummer: SAF-2026-802",
+      "Food 1 x 85,00 85,00 7%",
+      "Dinner 1 x 28,00 28,00 7%",
+      "Lunch 1 x 48,00 48,00 7%",
+      "Parking 1 x 80,00 80,00 19%",
+      "Drinks 1 x 15,00 15,00 19%",
+      "Espresso 1 x 9,00 9,00 19%",
+      "WLAN 1 x 10,00 10,00 19%",
+    ],[
+      "Rechnungsnummer: SAF-2026-802",
+      "Business Paket 1 x 29,00 29,00",
+      "USt 7% Netto 766,00 Steuer 53,62",
+      "USt 19% Netto 143,00 Steuer 27,17",
+      "Nettosumme 909,00",
+      "Umsatzsteuer gesamt 80,79",
+      "Gesamtbetrag 989,79",
+    ]])));
+    try {
+      expect(result.draft.items).toHaveLength(13);
+      expect(result.draft.items.find(item => item.description === "Business Paket")?.taxRate).toBeNull();
+      expect(result.draft.fields.invoiceNumber?.value).toBe("SAF-2026-802");
+      expect(sumLineItemAmounts(result.draft.items).totalCents).toBe(90900n);
+      expect(reconcileInvoice(result.draft).map(x => x.id)).toEqual(["missing-tax-rates"]);
+    } finally {
+      await result.pdf.loadingTask.destroy();
+    }
+  });
 });
