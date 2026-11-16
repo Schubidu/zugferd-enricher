@@ -63,4 +63,16 @@ describe("printed amount basis and precise net reconciliation", () => {
     ]));
     expect(draft.items[0]?.amount).toBe("100,00");
   });
+
+  it("resets net evidence when the same page switches to a gross-priced table", () => {
+    const draft = recognizeInvoice([
+      line(1,1,"LEISTUNG - MENGE x EINZELPREIS = NETTOBETRAG - UST"),
+      line(1,2,"Service 1 x 100,00 100,00 19%"),
+      line(1,3,"LEISTUNG - MENGE x EINZELPREIS = BRUTTOBETRAG - UST"),
+      line(1,4,"Other service 1 x 119,00 119,00 19%"),
+    ],1);
+    expect(draft.items).toHaveLength(2);
+    expect(draft.items[0]?.amountBasis?.kind).toBe("net");
+    expect(draft.items[1]?.amountBasis).toBeUndefined();
+  });
 });
