@@ -309,4 +309,23 @@ describe("position sum in the browser invoice review", () => {
     expect(screen.getByText(/Kein belegter Steuersatz oder Steuerstatus/)).toBeInTheDocument();
   });
 
+
+  it("moves keyboard focus to the relevant section heading on finding navigation", () => {
+    const draft: InvoiceDraft = {
+      ...initialDraft,
+      fields: {
+        ...emptyFields(),
+        netTotal:{value:"100,00",origin:"pdf",evidenceIds:["net"]},
+        taxTotal:{value:"19,00",origin:"pdf",evidenceIds:["tax"]},
+        grossTotal:{value:"120,00",origin:"pdf",evidenceIds:["gross"]},
+      },
+      taxGroups:[{rate:"19%",net:"90,00",tax:"17,10",evidenceIds:["tax-group"]}],
+    };
+    render(<InvoiceReview pdf={pdf} draft={draft} onDraftChange={vi.fn()}/>);
+    fireEvent.click(screen.getByRole("button",{name:"Rechnungsangaben prüfen"}));
+    expect(screen.getByRole("heading",{name:"Rechnungsangaben"})).toHaveFocus();
+    fireEvent.click(screen.getAllByRole("button",{name:"Steuergruppen prüfen"})[0]!);
+    expect(screen.getByRole("heading",{name:"Ausgewiesene Steuergruppen"})).toHaveFocus();
+  });
+
 });
