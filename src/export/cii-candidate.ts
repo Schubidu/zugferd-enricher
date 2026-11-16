@@ -238,7 +238,6 @@ export function buildCiiCandidate(original: InvoiceDraft, reviewed: InvoiceDraft
       partyXml("Seller",sellerName,facts.seller,facts.seller.vatId) +
       partyXml("Buyer",buyerName,facts.buyer) +
       "</ram:ApplicableHeaderTradeAgreement>" +
-      "<ram:ApplicableHeaderTradeDelivery/>" +
       "<ram:ApplicableHeaderTradeSettlement>" +
       tag("InvoiceCurrencyCode",facts.currency.value) + xmlGroups +
       optionalDueDate +
