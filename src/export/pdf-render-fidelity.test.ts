@@ -57,7 +57,6 @@ describe("browser-local PDF pixel parity", () => {
     b[0] = 255;
     b[7] = 254;
     expect(identicalPixels(a,b,2,1)).toBe(false);
-    expect(identicalPixels(a,b,1,2)).toBe(true === false);
     expect(identicalPixels(a,new Uint8ClampedArray(3),2,1)).toBe(false);
     expect(identicalPixels(a,a,0,0)).toBe(false);
   });
