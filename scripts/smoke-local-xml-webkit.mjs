@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import console from "node:console";
 import process from "node:process";
 import {readFileSync} from "node:fs";
+import {URL} from "node:url";
 import {webkit} from "playwright";
 
 const file = process.argv[2];
