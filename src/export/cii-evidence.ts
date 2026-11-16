@@ -16,6 +16,7 @@ export type CiiAddress = {
 export type CiiSourceFacts = {
   currency: CiiFact;
   typeCode: CiiFact;
+  payable: CiiFact;
   seller: CiiAddress & { vatId: CiiFact };
   buyer: CiiAddress;
   lineCodes: {category: CiiFact; unit: CiiFact}[];
@@ -28,6 +29,7 @@ export type CiiFactResult =
 const LABELS = {
   currency: /^Rechnungswährung:\s*([A-Z]{3})$/i,
   typeCode: /^Rechnungstypcode:\s*(\d{3})$/i,
+  payable: /^Zahlbetrag:\s*([-+]?(?:\d{1,3}(?:[., ]\d{3})+|\d+)[.,]\d{2})$/i,
   sellerStreet: /^Aussteller Straße:\s*(.+)$/i,
   sellerPostcode: /^Aussteller PLZ:\s*(.+)$/i,
   sellerCity: /^Aussteller Ort:\s*(.+)$/i,
@@ -70,6 +72,7 @@ export function extractCiiSourceFacts(draft: InvoiceDraft): CiiFactResult {
   }
   const currency = claim(lines, "currency", missing);
   const typeCode = claim(lines, "typeCode", missing);
+  const payable = claim(lines, "payable", missing);
   const sellerStreet = claim(lines, "sellerStreet", missing);
   const sellerPostcode = claim(lines, "sellerPostcode", missing);
   const sellerCity = claim(lines, "sellerCity", missing);
@@ -84,6 +87,7 @@ export function extractCiiSourceFacts(draft: InvoiceDraft): CiiFactResult {
   // A different explicitly printed currency/type must not be silently rewritten.
   if (currency && currency.value !== "EUR") missing.push("supportedCurrency");
   if (typeCode && typeCode.value !== "380") missing.push("supportedType");
+  if (payable && parseCents(payable.value) === null) missing.push("payableFormat");
   if (sellerCountry && !/^[A-Z]{2}$/.test(sellerCountry.value)) missing.push("sellerCountryCode");
   if (buyerCountry && !/^[A-Z]{2}$/.test(buyerCountry.value)) missing.push("buyerCountryCode");
   if (sellerVatId && !/^[A-Z]{2}[A-Z0-9]{2,16}$/.test(sellerVatId.value))
@@ -122,7 +126,7 @@ export function extractCiiSourceFacts(draft: InvoiceDraft): CiiFactResult {
   });
   if (draft.items.length === 0) missing.push("items");
 
-  if (missing.length > 0 || !currency || !typeCode || !sellerStreet ||
+  if (missing.length > 0 || !currency || !typeCode || !payable || !sellerStreet ||
     !sellerPostcode || !sellerCity || !sellerCountry || !sellerVatId ||
     !buyerStreet || !buyerPostcode || !buyerCity || !buyerCountry ||
     lineCodes.some(c => !c.category || !c.unit)) {
@@ -131,7 +135,7 @@ export function extractCiiSourceFacts(draft: InvoiceDraft): CiiFactResult {
   return {
     ok: true,
     facts: {
-      currency, typeCode,
+      currency, typeCode, payable,
       seller: {street:sellerStreet,postcode:sellerPostcode,city:sellerCity,
         countryCode:sellerCountry,vatId:sellerVatId},
       buyer: {street:buyerStreet,postcode:buyerPostcode,city:buyerCity,
