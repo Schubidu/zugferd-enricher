@@ -98,8 +98,9 @@ export function recognizeInvoice(sourceLines: SourceLine[], pageCount: number): 
       lastPage = line.page;
       netHeading = null; // Do not carry a heading into another PDF page.
     }
-    if (netItemHeading.test(line.text)) {
-      netHeading = line;
+    if (/\bMENGE\s*[x×]\s*EINZELPREIS\s*=/i.test(line.text)) {
+      // A new unknown/gross-priced table invalidates an earlier net heading.
+      netHeading = netItemHeading.test(line.text) ? line : null;
       continue;
     }
     if (/^\s*(?:STEUERÜBERSICHT|POSITIONSSUMME|STEUERAUSWEIS|Zwischensumme|Tax\s+summary)\b/i.test(line.text)) {
