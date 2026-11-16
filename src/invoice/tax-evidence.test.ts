@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SourceLine } from "./model";
-import { findSourceTaxEvidence, isTaxExplanationLine, selectTaxEvidenceCandidates } from "./tax-evidence";
+import { findSourceTaxEvidence, findTaxStatementMentions, isTaxExplanationLine, selectTaxEvidenceCandidates } from "./tax-evidence";
 
 function lines(...entries: string[]): SourceLine[] {
   return entries.map((text, index) => ({
@@ -52,4 +52,30 @@ describe("local contextual tax evidence candidate model", () => {
     expect(isTaxExplanationLine("Kurtaxe im Namen der Gemeinde, nicht ohne Umsatzsteuer: 10,50")).toBe(true);
     expect(isTaxExplanationLine("Kurtaxe 3 x 3,50 10,50")).toBe(false);
   });
+
+  it("rejects explicit contradictory Mehrwertsteuer rates even next to no-VAT language", () => {
+    const conflicting = lines(
+      "Kurtaxe im Namen der Gemeinde, ohne Umsatzsteuer, mit 19% Mehrwertsteuer: 10,50",
+      "Kurtaxe (inkl. Umsatzsteuer) 10,50",
+    );
+    expect(findSourceTaxEvidence(conflicting)).toEqual([]);
+    expect(findTaxStatementMentions(conflicting)).toEqual([
+      {label:"kurtaxe",amountCents:1050n,evidenceId:"evidence-0"},
+      {label:"kurtaxe",amountCents:1050n,evidenceId:"evidence-1"},
+    ]);
+    expect(isTaxExplanationLine(conflicting[0]!.text)).toBe(true);
+    expect(isTaxExplanationLine(conflicting[1]!.text)).toBe(false);
+  });
+
+  it("detects conflicting statements independently of whether the model selects them", () => {
+    const source = lines(
+      "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 10,50",
+      "Kurtaxe im Namen der Gemeinde mit 19% Umsatzsteuer: 10,50",
+    );
+    expect(findSourceTaxEvidence(source)).toEqual([
+      {label:"kurtaxe",amountCents:1050n,evidenceId:"evidence-0"},
+    ]);
+    expect(findTaxStatementMentions(source)).toHaveLength(2);
+  });
+
 });
