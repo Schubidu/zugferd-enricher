@@ -1,4 +1,3 @@
-import { validateCiiXmlLocally } from "./local-xml-engine";
 import { loadValidatorResources } from "./validator-assets";
 import type { LocalXmlValidation } from "./local-xml-engine";
 
@@ -7,14 +6,15 @@ import type { LocalXmlValidation } from "./local-xml-engine";
  * network access. The caller terminates it after one result or cancellation.
  */
 type Request = {id: number; xml: string};
-type Reply = {id: number; result: LocalXmlValidation};
+type Reply = {id: number; result: LocalXmlValidation} | {id:number; progress:string};
 const context = self as unknown as {
   postMessage: (message: Reply) => void;
   onmessage: ((event: MessageEvent<Request>) => void) | null;
 };
 
-const trace = (stage: string) => {
-  if (import.meta.env.VITE_VALIDATOR_SMOKE === "1") console.info("[xml-smoke] " + stage);
+const trace = (id: number, stage: string) => {
+  // Sent only in the dedicated CI build, contains no invoice data.
+  if (import.meta.env.VITE_VALIDATOR_SMOKE === "1") context.postMessage({id,progress:stage});
 };
 
 context.onmessage = event => {
@@ -25,13 +25,17 @@ context.onmessage = event => {
       if (typeof xml !== "string" || xml.length > 2_000_000) {
         throw new Error("Unacceptable XML payload");
       }
-      trace("worker-start");
+      trace(id,"worker-start");
       const verified = await loadValidatorResources();
-      trace("resources-verified");
-      result = validateCiiXmlLocally(xml,verified);
-      trace("engine-finished:" + result.status);
+      trace(id,"resources-verified");
+      // Lazy import makes the expensive WASM initialization independently
+      // observable and allows the caller to cancel a stalled module load.
+      const {validateCiiXmlLocally} = await import("./local-xml-engine");
+      trace(id,"engine-module-ready");
+      result = validateCiiXmlLocally(xml,verified,stage => trace(id,stage));
+      trace(id,"engine-finished:" + result.status);
     } catch {
-      trace("worker-exception");
+      trace(id,"worker-exception");
       // Never echo user invoice content or a thrown network error to the page.
       result = {status:"unavailable",reason:"LOCAL_VALIDATION_UNAVAILABLE"};
     }
