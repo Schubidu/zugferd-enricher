@@ -22,33 +22,45 @@ function invoice(): InvoiceDraft {
   return recognizeInvoice(lines,1);
 }
 
-describe("ZUGFeRD export status disclosure", () => {
-  it("shows a truthful non-exporting status, with details behind disclosure", () => {
+describe("secondary export status disclosure", () => {
+  it("does not distract from a successful invoice review with non-actionable blockers", () => {
     const source = invoice();
     render(<ExportStatus original={source} reviewed={structuredClone(source)}/>);
-    expect(screen.getByRole("heading",{name:"ZUGFeRD-Verarbeitungskopie"})).toBeInTheDocument();
-    expect(screen.getByText(/Export noch nicht verfügbar/i)).toBeInTheDocument();
-    const disclosure = screen.getByText("Exportvoraussetzungen anzeigen").closest("details");
+    expect(screen.getByRole("region",{name:"ZUGFeRD-Export"})).toBeInTheDocument();
+    expect(screen.getByText("noch nicht verfügbar")).toBeInTheDocument();
+    const summary = screen.getByText(/ZUGFeRD-Export/);
+    const disclosure = summary.closest("details");
     expect(disclosure).not.toHaveAttribute("open");
     expect(screen.queryByRole("button",{name:/export|herunterladen|erstellen/i})).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("Exportvoraussetzungen anzeigen"));
+    fireEvent.click(summary);
     expect(disclosure).toHaveAttribute("open");
-    expect(screen.getByRole("heading",{name:"Fehlende oder ungeklärte Rechnungsangaben"})).toBeInTheDocument();
-    expect(screen.getByRole("heading",{name:"Technische Validierung"})).toBeInTheDocument();
-    expect(screen.queryByRole("heading",{name:"Abweichungen zum Original"})).not.toBeInTheDocument();
-    expect(screen.getByText(/Eine spätere Verarbeitungskopie ersetzt weder die Originalrechnung/i)).toBeInTheDocument();
+    expect(screen.getByText(/Die Rechnungsprüfung funktioniert bereits/)).toBeInTheDocument();
+    expect(screen.getByText(/vollständige EN-16931-Datenbasis/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading",{name:"Offene Rechnungsangaben"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading",{name:"Änderungen gegenüber dem Original"})).not.toBeInTheDocument();
   });
 
-  it("reveals source-fidelity blockers on review edits, even for an unchanged amount", () => {
+  it("shows real source deviations when reviewed values change", () => {
     const source = invoice();
     const edited = structuredClone(source);
     edited.fields.grossTotal = {...edited.fields.grossTotal!,origin:"manual"};
     const {rerender} = render(<ExportStatus original={source} reviewed={source}/>);
-    expect(screen.queryByRole("heading",{name:"Abweichungen zum Original"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading",{name:"Änderungen gegenüber dem Original"})).not.toBeInTheDocument();
     rerender(<ExportStatus original={source} reviewed={edited}/>);
-    expect(screen.getByRole("heading",{name:"Abweichungen zum Original"})).toBeInTheDocument();
+    expect(screen.getByRole("heading",{name:"Änderungen gegenüber dem Original"})).toBeInTheDocument();
     expect(screen.getByText(/Brutto weicht vom Originalstand ab/i)).toBeInTheDocument();
     expect(source.fields.grossTotal?.origin).toBe("pdf");
     expect(screen.queryByRole("button",{name:/export|herunterladen|erstellen/i})).not.toBeInTheDocument();
+  });
+
+  it("shows only concrete missing fields, not every permanently unsupported XML feature", () => {
+    const original = invoice();
+    const reviewed = structuredClone(original);
+    original.fields.recipient = null;
+    reviewed.fields.recipient = null;
+    render(<ExportStatus original={original} reviewed={reviewed}/>);
+    expect(screen.getByRole("heading",{name:"Offene Rechnungsangaben"})).toBeInTheDocument();
+    expect(screen.getByText(/Rechnungsempfänger ist nicht eindeutig/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Währungscode ist nicht unabhängig belegt/i)).not.toBeInTheDocument();
   });
 });
