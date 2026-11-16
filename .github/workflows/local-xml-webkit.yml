@@ -30,7 +30,7 @@ jobs:
       - name: Install isolated WebKit driver for the smoke test
         run: |
           set -euo pipefail
-          npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.65.1
           npx playwright install --with-deps webkit
       - name: Build CI-only entry with the actual production worker bundle
         run: |
