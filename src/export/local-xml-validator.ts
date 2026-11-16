@@ -2,6 +2,26 @@ import type { LocalXmlValidation } from "./local-xml-engine";
 
 export type { LocalXmlValidation } from "./local-xml-engine";
 
+/** Reject unexpected or incomplete Worker success responses, never trust a label alone. */
+function isLocalXmlValidation(value: unknown): value is LocalXmlValidation {
+  if (!value || typeof value !== "object" || !("status" in value)) return false;
+  const result = value as Record<string,unknown>;
+  switch(result.status) {
+    case "valid-xml-only":
+      return result.checkedProfiles === 2;
+    case "invalid":
+      return Array.isArray(result.failures) && result.failures.length > 0 &&
+        result.failures.length <= 512 &&
+        result.failures.every(item => typeof item === "string" &&
+          item.length > 0 && item.length <= 256);
+    case "unavailable":
+      return typeof result.reason === "string" &&
+        result.reason.length > 0 && result.reason.length <= 256;
+    default:
+      return false;
+  }
+}
+
 /**
  * Request exactly one local EN16931 check. A fresh Worker ensures parsed CII,
  * WASM validators and XSLT result DOMs are released on completion/cancellation.
@@ -66,7 +86,7 @@ export function validateCiiXmlInBrowser(
         return;
       }
       const result = message.result;
-      if (!result || !["valid-xml-only","invalid","unavailable"].includes(result.status)) {
+      if (!isLocalXmlValidation(result)) {
         finish({status:"unavailable",reason:"LOCAL_VALIDATION_INVALID_RESPONSE"});
         return;
       }
