@@ -3,7 +3,7 @@ import type { InvoiceDraft, SourceBox, SourceLine } from "./model";
 import { recognizeInvoice } from "./recognize";
 import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
-export type LoadedInvoice = { pdf: PDFDocumentProxy; draft: InvoiceDraft };
+export type LoadedInvoice = { pdf: PDFDocumentProxy; originalDraft: InvoiceDraft; draft: InvoiceDraft };
 
 type TextFragment = { text: string; x: number; y: number; width: number; height: number };
 function clamp(value: number): number { return Math.min(1, Math.max(0, value)); }
@@ -81,7 +81,10 @@ export async function loadInvoicePdf(file: File, signal?: AbortSignal): Promise<
       page.cleanup();
     }
     checkAbort();
-    return { pdf, draft: recognizeInvoice(lines, pdf.numPages) };
+    // Keep the original parser snapshot distinct from editable review state.
+    // Any future XML mapping must compare reviewed facts to this original.
+    const originalDraft = recognizeInvoice(lines, pdf.numPages);
+    return { pdf, originalDraft, draft: structuredClone(originalDraft) };
   } catch (error) {
     await loading.destroy();
     throw error;
