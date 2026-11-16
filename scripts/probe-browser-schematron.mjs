@@ -55,10 +55,17 @@ function loadXmlDocument(uri,baseUri) {
   return documentCache.get(name);
 }
 const source = parseXml(input);
-const corrupted = parseXml(input.replace(
-  "<ram:GrandTotalAmount>190.40</ram:GrandTotalAmount>",
-  "<ram:GrandTotalAmount>190.41</ram:GrandTotalAmount>",
-));
+const mutations = [
+  ["invalid gross", "<ram:GrandTotalAmount>190.40</ram:GrandTotalAmount>",
+    "<ram:GrandTotalAmount>190.41</ram:GrandTotalAmount>"],
+  ["invalid VAT", "<ram:CalculatedAmount>30.40</ram:CalculatedAmount>",
+    "<ram:CalculatedAmount>30.41</ram:CalculatedAmount>"],
+  ["invalid line amount", "<ram:LineTotalAmount>160.00</ram:LineTotalAmount>",
+    "<ram:LineTotalAmount>150.00</ram:LineTotalAmount>"],
+].map(([label,from,to]) => {
+  assert.ok(input.includes(from), "Missing positive fixture for " + label);
+  return {label,doc:parseXml(input.replace(from,to))};
+});
 let sawOfficialBusinessRule = false;
 const failures = [];
 
@@ -93,14 +100,18 @@ for(const stylesheetName of rules) {
     if (label === "valid") {
       assert.equal(assertions.length,0,
         stylesheetName + ": synthetic positive fixture produces false failures: " + ids.slice(0,10));
-    } else if (ids.some(id => /^BR-CO-(?:15|16)$/.test(id))) {
-      sawOfficialBusinessRule = true;
+    } else {
+      assert.ok(assertions.length > 0,
+        stylesheetName + " silently accepted corrupted " + label);
+      if (label === "invalid gross" && ids.some(id => /^BR-CO-(?:15|16)$/.test(id))) {
+        sawOfficialBusinessRule = true;
+      }
     }
     console.log("SCHEMATRON:",stylesheetName,label,"rules:",fired.length,"failed:",ids.length,
       "examples:",ids.slice(0,5).join(","));
   };
   check(source,"valid");
-  check(corrupted,"invalid");
+  for (const mutation of mutations) check(mutation.doc,mutation.label);
   console.log("COMPILATION/MS",stylesheetName,Math.round(performance.now()-start));
   } catch (error) {
     failures.push(stylesheetName + ": " + String(error?.message ?? error));
