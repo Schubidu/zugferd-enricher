@@ -17,6 +17,7 @@ export type CiiSourceFacts = {
   currency: CiiFact;
   typeCode: CiiFact;
   payable: CiiFact;
+  deliveryDate: CiiFact;
   seller: CiiAddress & { vatId: CiiFact };
   buyer: CiiAddress;
   lineCodes: {category: CiiFact; unit: CiiFact}[];
@@ -30,6 +31,7 @@ const LABELS = {
   currency: /^Rechnungswährung:\s*([A-Z]{3})$/i,
   typeCode: /^Rechnungstypcode:\s*(\d{3})$/i,
   payable: /^Zahlbetrag:\s*([-+]?(?:\d{1,3}(?:[., ]\d{3})+|\d+)[.,]\d{2})$/i,
+  deliveryDate: /^Leistungsdatum:\s*(\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2})$/i,
   sellerStreet: /^Aussteller Straße:\s*(.+)$/i,
   sellerPostcode: /^Aussteller PLZ:\s*(.+)$/i,
   sellerCity: /^Aussteller Ort:\s*(.+)$/i,
@@ -73,6 +75,7 @@ export function extractCiiSourceFacts(draft: InvoiceDraft): CiiFactResult {
   const currency = claim(lines, "currency", missing);
   const typeCode = claim(lines, "typeCode", missing);
   const payable = claim(lines, "payable", missing);
+  const deliveryDate = claim(lines, "deliveryDate", missing);
   const sellerStreet = claim(lines, "sellerStreet", missing);
   const sellerPostcode = claim(lines, "sellerPostcode", missing);
   const sellerCity = claim(lines, "sellerCity", missing);
@@ -126,7 +129,7 @@ export function extractCiiSourceFacts(draft: InvoiceDraft): CiiFactResult {
   });
   if (draft.items.length === 0) missing.push("items");
 
-  if (missing.length > 0 || !currency || !typeCode || !payable || !sellerStreet ||
+  if (missing.length > 0 || !currency || !typeCode || !payable || !deliveryDate || !sellerStreet ||
     !sellerPostcode || !sellerCity || !sellerCountry || !sellerVatId ||
     !buyerStreet || !buyerPostcode || !buyerCity || !buyerCountry ||
     lineCodes.some(c => !c.category || !c.unit)) {
@@ -135,7 +138,7 @@ export function extractCiiSourceFacts(draft: InvoiceDraft): CiiFactResult {
   return {
     ok: true,
     facts: {
-      currency, typeCode, payable,
+      currency, typeCode, payable, deliveryDate,
       seller: {street:sellerStreet,postcode:sellerPostcode,city:sellerCity,
         countryCode:sellerCountry,vatId:sellerVatId},
       buyer: {street:buyerStreet,postcode:buyerPostcode,city:buyerCity,
