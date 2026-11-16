@@ -13,6 +13,10 @@ const context = self as unknown as {
   onmessage: ((event: MessageEvent<Request>) => void) | null;
 };
 
+const trace = (stage: string) => {
+  if (import.meta.env.VITE_VALIDATOR_SMOKE === "1") console.info("[xml-smoke] " + stage);
+};
+
 context.onmessage = event => {
   const {id,xml} = event.data;
   void (async () => {
@@ -21,9 +25,13 @@ context.onmessage = event => {
       if (typeof xml !== "string" || xml.length > 2_000_000) {
         throw new Error("Unacceptable XML payload");
       }
+      trace("worker-start");
       const verified = await loadValidatorResources();
+      trace("resources-verified");
       result = validateCiiXmlLocally(xml,verified);
+      trace("engine-finished:" + result.status);
     } catch {
+      trace("worker-exception");
       // Never echo user invoice content or a thrown network error to the page.
       result = {status:"unavailable",reason:"LOCAL_VALIDATION_UNAVAILABLE"};
     }
