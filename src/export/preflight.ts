@@ -1,4 +1,4 @@
-import { FIELD_KEYS, FIELD_LABELS } from "../invoice/model";
+import { FIELD_KEYS, FIELD_LABELS, isSourceBackedNet } from "../invoice/model";
 import type { FieldKey, FieldValue, InvoiceDraft, SourceLine } from "../invoice/model";
 import { checkTotals, parseCents } from "../invoice/money";
 import { reconcileInvoice } from "../invoice/reconcile";
@@ -123,7 +123,9 @@ export function assessExportPreflight(original: InvoiceDraft, reviewed: InvoiceD
   for (const [index, item] of original.items.entries()) {
     if (item.origin !== "pdf" || !validEvidence(original.sourceLines, item.evidenceIds) ||
       (item.taxTreatment && (item.taxTreatment.origin !== "pdf" ||
-        !validEvidence(original.sourceLines, item.taxTreatment.evidenceIds)))) {
+        !validEvidence(original.sourceLines, item.taxTreatment.evidenceIds))) ||
+      (item.amountBasis && (item.amountBasis.origin !== "pdf" ||
+        !validEvidence(original.sourceLines, item.amountBasis.evidenceIds)))) {
       add("source", "SOURCE_EVIDENCE_INVALID", `items.${index}`,
         "Mindestens eine Rechnungsposition oder ihre Steuerbehandlung ist nicht belegt.");
     }
@@ -157,9 +159,8 @@ export function assessExportPreflight(original: InvoiceDraft, reviewed: InvoiceD
       "Die aus dem Original erkannten Rechnungsdaten erfordern weitere Prüfung.");
   }
 
-  // Current InvoiceDraft intentionally does NOT contain these EN 16931 facts.
-  // In particular a printed percentage is not a verified BT-151 VAT category;
-  // and a line amount is not known to be net rather than gross.
+  // A printed tax percentage is not an EN 16931 BT-151 VAT category.
+  // The basis gate can now be satisfied by explicit PDF column evidence.
   add("semantics", "SOURCE_LINE_COVERAGE_UNVERIFIED", "items.coverage",
     "Die vollständige Erfassung aller sichtbaren Rechnungspositionen ist nicht nachgewiesen.");
   add("semantics", "CURRENCY_UNVERIFIED", "currency",
@@ -168,8 +169,10 @@ export function assessExportPreflight(original: InvoiceDraft, reviewed: InvoiceD
     "Vollständige Originalanschriften und Ländercodes von Aussteller und Empfänger fehlen.");
   add("semantics", "INVOICE_TYPE_UNVERIFIED", "invoiceType",
     "Der Rechnungstypcode ist nicht aus dem Original belegt (BT-3).");
-  add("semantics", "LINE_AMOUNT_BASIS_UNVERIFIED", "items.amountBasis",
-    "Die Netto-/Brutto-Basis der einzelnen Positionen ist nicht belegt.");
+  if (original.items.length === 0 || original.items.some(item => !isSourceBackedNet(item))) {
+    add("semantics", "LINE_AMOUNT_BASIS_UNVERIFIED", "items.amountBasis",
+      "Die Netto-/Brutto-Basis der einzelnen Positionen ist nicht belegt.");
+  }
   add("semantics", "LINE_VAT_CATEGORY_UNVERIFIED", "items.vatCategory",
     "Steuersätze und Sonderbehandlungen sind noch keinen belegten EN-16931-Steuerkategorien zugeordnet.");
 
