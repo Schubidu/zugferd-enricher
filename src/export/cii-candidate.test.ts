@@ -19,6 +19,7 @@ const originalLines = [
   "Rechnungsempfänger: Kunde <Partner> UG",
   "Rechnungsnummer: XML-2026-001",
   "Rechnungsdatum: 15.11.2026",
+  "Leistungsdatum: 15.11.2026",
   "Fälligkeitsdatum: 29.11.2026",
   "Rechnungswährung: EUR",
   "Rechnungstypcode: 380",
@@ -91,6 +92,7 @@ describe("EN16931 internal CII XML preparation (never a certified export)", () =
     expect(result.xml).toContain("<ram:GrandTotalAmount>190.40</ram:GrandTotalAmount>");
     expect(result.xml).toContain("<ram:DuePayableAmount>190.40</ram:DuePayableAmount>");
     expect(result.xml).toContain('format="102">20261115</udt:DateTimeString>');
+    expect(result.xml).toContain("<ram:ActualDeliverySupplyChainEvent>");
     const parsed = new DOMParser().parseFromString(result.xml, "application/xml");
     expect(parsed.querySelector("parsererror")).toBeNull();
     expect(parsed.documentElement.localName).toBe("CrossIndustryInvoice");
@@ -208,5 +210,19 @@ describe("EN16931 internal CII XML preparation (never a certified export)", () =
     expect(result.xml.match(/<ram:CalculatedAmount>/g)).toHaveLength(2);
     expect(result.xml).toContain("<ram:TaxBasisTotalAmount>170.00</ram:TaxBasisTotalAmount>");
     expect(result.xml).toContain("<ram:GrandTotalAmount>201.10</ram:GrandTotalAmount>");
+  });
+
+  it("blocks missing or ambiguous delivery dates instead of inserting an empty CII element", () => {
+    const missing = originalLines.filter(line => !line.startsWith("Leistungsdatum:"));
+    const result = candidate(missing);
+    expect(result.status).toBe("blocked");
+    if (result.status === "blocked") expect(result.reasons).toContain("EVIDENCE:deliveryDate");
+
+    expect(candidate([...originalLines,"Leistungsdatum: 15.11.2026"]).status).toBe("blocked");
+    const invalid = originalLines.map(line => line === "Leistungsdatum: 15.11.2026" ?
+      "Leistungsdatum: 31.02.2026" : line);
+    const malformed = candidate(invalid);
+    expect(malformed.status).toBe("blocked");
+    if (malformed.status === "blocked") expect(malformed.reasons).toContain("EVIDENCE:deliveryDate");
   });
 });
