@@ -62,3 +62,44 @@ jobs:
           path: ${{ runner.temp }}/browser-validator-bundle/
           retention-days: 2
           if-no-files-found: error
+
+  publish-to-pr-branch:
+    # Controlled, same-repository PR only. Never grant write permission to a
+    # fork PR or execute its code with a write token.
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/issue-5-export-preflight' }}
+    needs: build
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: local-validator-bundle
+          path: ${{ runner.temp }}/local-validator-bundle
+      - name: Verify pinned resources and commit reproducible bundle
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Lease-like guard: never overwrite someone else's new changes.
+          test "$(git ls-remote origin refs/heads/feat/issue-5-export-preflight | cut -f1)" = "$EXPECTED_SHA"
+          SRC="$RUNNER_TEMP/local-validator-bundle"
+          test -s "$SRC/package-lock.json"
+          test -s "$SRC/package.json"
+          (cd "$SRC/public/validation/ferd-2.5.2" && sha256sum -c SHA256SUMS)
+          cp "$SRC/package.json" "$SRC/package-lock.json" .
+          mkdir -p public/validation
+          cp -R "$SRC/public/validation/ferd-2.5.2" public/validation/
+          git add package.json package-lock.json public/validation/ferd-2.5.2
+          if git diff --cached --quiet; then
+            echo "Pinned assets unchanged; no branch update"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "build(#5): bundle pinned offline FeRD validation resources and lockfile"
+          git push origin HEAD:refs/heads/feat/issue-5-export-preflight
