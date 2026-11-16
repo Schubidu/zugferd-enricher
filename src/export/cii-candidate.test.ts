@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { writeFileSync } from "node:fs";
 import { recognizeInvoice } from "../invoice/recognize";
 import type { InvoiceDraft, SourceLine } from "../invoice/model";
 import { buildCiiCandidate } from "./cii-candidate";
@@ -70,6 +71,11 @@ describe("EN16931 internal CII XML preparation (never a certified export)", () =
     expect(result.status).toBe("unvalidated");
     if (result.status !== "unvalidated") return;
     expect(result.profile).toBe("EN16931");
+    // Only the purpose-built synthetic invoice may leave Vitest for the CI
+    // validator; no uploaded document or user's review is ever serialized.
+    if (process.env.CII_VALIDATION_OUTPUT) {
+      writeFileSync(process.env.CII_VALIDATION_OUTPUT, result.xml, {encoding:"utf8", flag:"wx"});
+    }
     expect(result.xml).toContain("urn:cen.eu:en16931:2017");
     expect(result.xml).toContain("<ram:ID>XML-2026-001</ram:ID>");
     expect(result.xml).toContain("<ram:Name>Haus &amp; Söhne GmbH</ram:Name>");
