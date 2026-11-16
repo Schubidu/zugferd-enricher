@@ -33,7 +33,8 @@ function safeInput(xml: string) {
 function parseXml(xml: string): Document {
   if (/<!DOCTYPE|<!ENTITY/i.test(xml)) throw new Error("DTD prohibited");
   const parser = new DOMParser({
-    errorHandler: (level, message) => { throw new Error(level + ": " + message); },
+    // xmldom 0.9.12 requires onError; legacy errorHandler is deprecated.
+    onError: (level, message) => { throw new Error(level + ": " + message); },
   });
   const doc = parser.parseFromString(xml,"application/xml");
   if (!doc || !doc.documentElement || doc.getElementsByTagName("parsererror").length) {
