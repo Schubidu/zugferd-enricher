@@ -34,6 +34,11 @@ context.onmessage = event => {
       trace(id,"engine-module-ready");
       result = validateCiiXmlLocally(xml,verified,stage => trace(id,stage));
       trace(id,"engine-finished:" + result.status);
+      // Inaccessible rule engines must not leak parser internals or invoice text
+      // into the page or future user-visible diagnostics.
+      if (result.status === "unavailable") {
+        result = {status:"unavailable",reason:"LOCAL_VALIDATION_UNAVAILABLE"};
+      }
     } catch {
       trace(id,"worker-exception");
       // Never echo user invoice content or a thrown network error to the page.
