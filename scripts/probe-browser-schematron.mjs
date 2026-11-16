@@ -31,7 +31,7 @@ assert.ok(!/<!DOCTYPE|<!ENTITY/i.test(input), "Untrusted XML with DTD is forbidd
 
 const files = readdirSync(sourceDirectory).filter(name => /\.(xml|xslt|xsl)$/.test(name));
 const resources = new Map(files.map(name => [name,readFileSync(join(sourceDirectory,name),"utf8")]));
-const rules = ["FACTUR-X_EN16931.xslt","EN16931-CII-validation.xslt"];
+const rules = ["EN16931-CII-validation.xslt","FACTUR-X_EN16931.xslt"];
 for(const name of rules) assert.ok(resources.has(name), "Missing official rule file " + name);
 
 function loadFromMemory(uri, baseUri = "") {
@@ -51,9 +51,11 @@ const corrupted = parseXml(input.replace(
   "<ram:GrandTotalAmount>190.41</ram:GrandTotalAmount>",
 ));
 let sawOfficialBusinessRule = false;
+const failures = [];
 
 for(const stylesheetName of rules) {
   const start = performance.now();
+  try {
   const stylesheet = compileStylesheet(resources.get(stylesheetName), {
     parseXml,
     baseUri:"memory:///schematron/" + stylesheetName,
@@ -91,7 +93,12 @@ for(const stylesheetName of rules) {
   check(source,"valid");
   check(corrupted,"invalid");
   console.log("COMPILATION/MS",stylesheetName,Math.round(performance.now()-start));
+  } catch (error) {
+    failures.push(stylesheetName + ": " + String(error?.message ?? error));
+    console.error("ENGINE INCOMPATIBLE:",stylesheetName,String(error?.message ?? error));
+  }
 }
 assert.equal(sawOfficialBusinessRule,true,
   "Corrupted invoice total must trigger real BR-CO-15/16 in the official CEN rules");
+assert.deepEqual(failures,[], "Unmodified official Schematron rules must ALL execute correctly");
 console.log("PASS: both official Schematron transforms, source memory only, independent positive/negative parity");
