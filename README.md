@@ -2,7 +2,7 @@
 
 Local-first, privacy-friendly tool to analyze, validate, and enrich existing PDF invoices with ZUGFeRD data.
 
-> **Project stage – Issue #3:** Text-based PDFs are read locally with PDF.js. Basic classification suggestions and source-backed arithmetic checks are available. OCR, complete tax validation and ZUGFeRD export are not implemented.
+> **Project stage – Issue #5 (export foundation):** Text PDFs are read locally; classification and source-backed arithmetic checks are available. The [source-fidelity export preflight](docs/export-gates.md) is under development and **always blocks output** until the missing EN 16931 source facts and independent XML/PDF/A-3 validators are implemented. OCR and ZUGFeRD export are not yet available.
 
 ## What this project will do
 
