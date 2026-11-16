@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="de">
+<head><meta charset="utf-8"><title>Local EN16931 WebKit CI probe</title></head>
+<body>
+<script type="module">
+  // Included ONLY when VALIDATOR_WEBKIT_SMOKE=1 during CI build.
+  // No user PDF is ever used by this test entry.
+  import {validateCiiXmlInBrowser} from "/src/export/local-xml-validator.ts";
+  window.__validateCiiForSmokeTest = validateCiiXmlInBrowser;
+</script>
+</body>
+</html>
