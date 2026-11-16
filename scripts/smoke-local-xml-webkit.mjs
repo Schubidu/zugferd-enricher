@@ -38,14 +38,18 @@ try {
     }
     return route.continue();
   });
-  await page.goto(origin,{waitUntil:"load"});
+  // Run against a CI-only second entry in the actual Vite production build.
+  // No Vite development dependency optimization, HMR or forced navigation.
+  page.on("framenavigated",frame => {
+    if (frame === page.mainFrame()) console.log("WEBKIT navigation:",frame.url());
+  });
+  await page.goto(origin + "/validation-smoke.html",{waitUntil:"load"});
+  await page.waitForFunction(
+    () => typeof window.__validateCiiForSmokeTest === "function",null,{timeout:60_000},
+  );
 
   async function validate(xml) {
-    return page.evaluate(async payload => {
-      const {validateCiiXmlInBrowser} =
-        await import("/src/export/local-xml-validator.ts");
-      return validateCiiXmlInBrowser(payload);
-    },xml);
+    return page.evaluate(payload => window.__validateCiiForSmokeTest(payload),xml);
   }
   const accepted = await validate(original);
   console.log("WEBKIT positive:",JSON.stringify(accepted));
