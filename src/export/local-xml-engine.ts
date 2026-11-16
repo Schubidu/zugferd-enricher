@@ -23,6 +23,9 @@ const PRIMARY_SCHEMA = "FACTUR-X_EN16931.xsd";
 const ENCODER = new TextEncoder();
 const DECODER = new TextDecoder("utf-8", {fatal:true});
 const MAX_XML_LENGTH = 2_000_000;
+const trace = (stage: string) => {
+  if (import.meta.env.VITE_VALIDATOR_SMOKE === "1") console.info("[xml-smoke] " + stage);
+};
 
 function safeInput(xml: string) {
   if (xml.length < 50 || xml.length > MAX_XML_LENGTH ||
@@ -73,6 +76,7 @@ function localResource(uri: string, resources: ValidatorResources): ValidatorRes
 export function validateCiiXmlLocally(xml: string, resources: ValidatorResources): LocalXmlValidation {
   try {
     safeInput(xml);
+    trace("engine-start");
     const xmlBytes = ENCODER.encode(xml);
     const xsdFiles = Object.fromEntries(
       [...resources].filter(([name]) => name.endsWith(".xsd"))
@@ -106,6 +110,7 @@ export function validateCiiXmlLocally(xml: string, resources: ValidatorResources
       schema?.dispose();
     }
 
+    trace("xsd-passed");
     const xmlDocument = parseXml(xml);
     const cache = new Map<string,Document>();
     const loadText = (uri: string): string =>
@@ -118,6 +123,7 @@ export function validateCiiXmlLocally(xml: string, resources: ValidatorResources
 
     const failures: string[] = [];
     for (const name of RULES) {
+      trace("schematron-start:" + name);
       const compiled = compileStylesheet(asResource(resources,name),{
         parseXml,
         baseUri:"memory:///schematron/" + name,
@@ -137,6 +143,7 @@ export function validateCiiXmlLocally(xml: string, resources: ValidatorResources
       }
       const fired = report.getElementsByTagNameNS(SVRL,"fired-rule");
       if (fired.length === 0) throw new Error("No Schematron rules executed");
+      trace("schematron-finished:" + name);
       const invalid = Array.from(report.getElementsByTagNameNS(SVRL,"failed-assert"));
       // Treat warnings conservatively until severity mapping is cross-checked.
       const warnings = report.getElementsByTagNameNS(SVRL,"successful-report");
