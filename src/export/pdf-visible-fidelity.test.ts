@@ -58,4 +58,27 @@ describe("combined local original/derivative fidelity prerequisite", () => {
       .rejects.toMatchObject({name:"AbortError"});
     expect(render).toHaveBeenCalledTimes(1);
   });
+
+  it("rejects cancellation between separate text and raster checks", async () => {
+    const controller = new AbortController();
+    text.mockImplementationOnce(async () => {
+      controller.abort();
+      return {status:"matched-text-layout",pages:1};
+    });
+    await expect(comparePdfVisibleFidelity(first,second,controller.signal))
+      .rejects.toMatchObject({name:"AbortError"});
+    expect(render).not.toHaveBeenCalled();
+  });
+
+  it("does not report matched fidelity if the user aborts during the pixel stage", async () => {
+    const controller = new AbortController();
+    text.mockResolvedValueOnce({status:"matched-text-layout",pages:1});
+    render.mockImplementationOnce(async () => {
+      controller.abort();
+      return {status:"matched-render",pages:1};
+    });
+    await expect(comparePdfVisibleFidelity(first,second,controller.signal))
+      .rejects.toMatchObject({name:"AbortError"});
+  });
+
 });
