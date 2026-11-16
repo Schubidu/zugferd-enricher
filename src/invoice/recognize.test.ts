@@ -226,7 +226,7 @@ describe("source-based invoice recognition", () => {
       "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 10,00",
     ]),1);
     const ambiguous = recognizeInvoice(pageLines(1,[description,exactNote,exactNote]),1);
-    for (const draft of [none,wrongAmount,ambiguous]) {
+    for (const draft of [none,ambiguous]) {
       expect(draft.items).toHaveLength(1);
       expect(draft.items[0]?.taxTreatment).toBeUndefined();
       expect(draft.items[0]?.taxRate).toBeNull();
@@ -234,6 +234,10 @@ describe("source-based invoice recognition", () => {
         expect.objectContaining({id:"missing-tax-rates",severity:"review"}),
       ]));
     }
+    // A non-matching explanatory-looking amount must not silently disappear:
+    // it might be a second charge, so preserve it for human/source review.
+    expect(wrongAmount.items).toHaveLength(2);
+    expect(wrongAmount.items.every(item => item.taxRate === null && !item.taxTreatment)).toBe(true);
   });
 
 
@@ -260,6 +264,48 @@ describe("source-based invoice recognition", () => {
     expect(draft.items).toHaveLength(1);
     expect(draft.items[0]?.taxTreatment).toBeUndefined();
     expect(reconcileInvoice(draft).some(f => f.id === "missing-tax-rates")).toBe(true);
+  });
+
+
+  it("rejects no-VAT status if a second source statement contradicts the supported note", () => {
+    const draft = recognizeInvoice(pageLines(1, [
+      "Kurtaxe 3 x 3,50 10,50",
+      "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 10,50",
+      "Kurtaxe im Namen der Gemeinde mit 19% Umsatzsteuer: 10,50",
+      "Gesamtbetrag 10,50",
+    ]), 1);
+    expect(draft.items).toHaveLength(1); // Both are annotations of the same printed charge.
+    expect(draft.items[0]?.amount).toBe("10,50");
+    expect(draft.items[0]?.taxTreatment).toBeUndefined();
+    expect(reconcileInvoice(draft).some(f => f.id === "missing-tax-rates")).toBe(true);
+  });
+
+  it("does not assign no-VAT from a self-contradictory Mehrwertsteuer statement", () => {
+    const draft = recognizeInvoice(pageLines(1, [
+      "Kurtaxe 3 x 3,50 10,50",
+      "Kurtaxe im Namen der Gemeinde, ohne Umsatzsteuer, mit 19% Mehrwertsteuer: 10,50",
+    ]), 1);
+    expect(draft.items).toHaveLength(1);
+    expect(draft.items[0]?.taxTreatment).toBeUndefined();
+    expect(draft.items[0]?.taxRate).toBeNull();
+  });
+
+  it("keeps standalone or ambiguous charge rows instead of discarding VAT-labelled Kurtaxe", () => {
+    const standalone = recognizeInvoice(pageLines(1,[
+      "Kurtaxe (inkl. Umsatzsteuer) 10,50",
+    ]),1);
+    expect(standalone.items).toHaveLength(1);
+    expect(standalone.items[0]).toMatchObject({
+      description:"Kurtaxe (inkl. Umsatzsteuer)", amount:"10,50", taxRate:null,
+    });
+    expect(reconcileInvoice(standalone).some(f => f.id === "missing-tax-rates")).toBe(true);
+
+    const standaloneAuthority = recognizeInvoice(pageLines(1, [
+      "Kurtaxe (im Namen der Gemeinde, ohne Umsatzsteuer): 10,50",
+    ]),1);
+    expect(standaloneAuthority.items).toHaveLength(1);
+    expect(standaloneAuthority.items[0]?.taxTreatment).toBeUndefined();
+    expect(standaloneAuthority.items[0]?.amount).toBe("10,50");
   });
 
 });
