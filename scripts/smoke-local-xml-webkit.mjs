@@ -28,7 +28,11 @@ try {
   page.on("pageerror",error => browserErrors.push(error.message));
   page.on("console",message => {
     if (message.type() === "error") browserErrors.push(message.text());
+    if (message.text().startsWith("[xml-smoke]")) console.log(message.text());
   });
+  page.on("worker",worker => console.log("WEBKIT worker created:",new URL(worker.url()).pathname));
+  page.on("requestfailed",request =>
+    console.log("WEBKIT request failed:",new URL(request.url()).pathname,request.failure()));
   page.on("request",request => {
     if (new URL(request.url()).origin !== origin) outside.push(request.url());
   });
