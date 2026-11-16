@@ -65,10 +65,12 @@ describe("cancelling a local extraction", () => {
     read.mockResolvedValueOnce({
       pdf: {numPages: 1, loadingTask: {destroy}},
       draft: {pageCount: 1, sourceLines: [], fields: emptyFields(), items: [], taxGroups: [], warnings: []},
+      originalDraft: {pageCount: 1, sourceLines: [], fields: emptyFields(), items: [], taxGroups: [], warnings: []},
     } as unknown as LoadedInvoice);
     render(<App />);
     selectAndRead();
     await waitFor(() => expect(screen.getByTestId("invoice-review")).toBeInTheDocument());
+    expect(screen.getByRole("heading", {name:"ZUGFeRD-Verarbeitungskopie"})).toBeInTheDocument();
     expect(screen.getByRole("heading", {name: "Ausgewählte Rechnung"})).toBeInTheDocument();
     expect(screen.getByText("first.pdf")).toBeInTheDocument();
     expect(screen.queryByText(/Rechnungspositionen und Beträge auslesen/i)).not.toBeInTheDocument();
