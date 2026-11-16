@@ -46,6 +46,32 @@ describe("one-shot private browser CII validation worker", () => {
     expect(created[0]?.terminated).toBe(true);
   });
 
+  it("rejects a Worker result that claims success without both profile checks", async () => {
+    install();
+    const pending = validateCiiXmlInBrowser(validInput);
+    created[0]!.reply({id:1,result:{status:"valid-xml-only",checkedProfiles:1}});
+    expect(await pending).toEqual({
+      status:"unavailable",reason:"LOCAL_VALIDATION_INVALID_RESPONSE",
+    });
+    expect(created[0]?.terminated).toBe(true);
+  });
+
+  it("rejects empty failure or unavailable responses instead of trusting a status alone", async () => {
+    install();
+    for (const result of [
+      {status:"invalid" as const,failures:[]},
+      {status:"unavailable" as const,reason:""},
+    ]) {
+      const pending = validateCiiXmlInBrowser(validInput);
+      const worker = created[created.length - 1]!;
+      worker.reply({id:1,result});
+      expect(await pending).toMatchObject({
+        status:"unavailable",reason:"LOCAL_VALIDATION_INVALID_RESPONSE",
+      });
+      expect(worker.terminated).toBe(true);
+    }
+  });
+
   it("never starts a Worker for invalid or dangerous inputs", async () => {
     install();
     expect(await validateCiiXmlInBrowser("<!DOCTYPE x>" + validInput)).toMatchObject({
