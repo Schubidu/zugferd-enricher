@@ -21,6 +21,8 @@ export type ExportBlockerCode =
   | "CURRENCY_UNVERIFIED"
   | "PARTY_ADDRESSES_UNVERIFIED"
   | "INVOICE_TYPE_UNVERIFIED"
+  | "PAYABLE_AMOUNT_UNVERIFIED"
+  | "SELLER_TAX_IDENTIFIER_UNVERIFIED"
   | "LINE_AMOUNT_BASIS_UNVERIFIED"
   | "LINE_VAT_CATEGORY_UNVERIFIED"
   | "XML_SCHEMA_VALIDATION_PENDING"
@@ -170,13 +172,22 @@ export function assessExportPreflight(original: InvoiceDraft, reviewed: InvoiceD
     add("semantics", "CURRENCY_UNVERIFIED", "currency",
       "Der Rechnungswährungscode ist nicht unabhängig belegt (BT-5).");
   }
-  if ([...lacking].some(key => key.startsWith("seller") || key.startsWith("buyer"))) {
+  if ([...lacking].some(key => (key.startsWith("seller") && !key.startsWith("sellerVatId")) ||
+    key.startsWith("buyer"))) {
     add("semantics", "PARTY_ADDRESSES_UNVERIFIED", "parties",
       "Vollständige Originalanschriften und Ländercodes von Aussteller und Empfänger fehlen.");
   }
   if (lacking.has("typeCode") || lacking.has("supportedType")) {
     add("semantics", "INVOICE_TYPE_UNVERIFIED", "invoiceType",
       "Der Rechnungstypcode ist nicht aus dem Original belegt (BT-3).");
+  }
+  if (lacking.has("sellerVatId") || lacking.has("sellerVatIdFormat")) {
+    add("semantics", "SELLER_TAX_IDENTIFIER_UNVERIFIED", "seller.taxId",
+      "Die Steuerkennung des Rechnungsausstellers ist nicht eindeutig im Original belegt.");
+  }
+  if (lacking.has("payable") || lacking.has("payableFormat")) {
+    add("semantics", "PAYABLE_AMOUNT_UNVERIFIED", "totals.payable",
+      "Der tatsächlich zu zahlende Betrag ist nicht ausdrücklich aus dem Original belegt.");
   }
   if (original.items.length === 0 || original.items.some(item => !isSourceBackedNet(item))) {
     add("semantics", "LINE_AMOUNT_BASIS_UNVERIFIED", "items.amountBasis",
