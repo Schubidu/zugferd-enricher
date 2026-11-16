@@ -3,6 +3,7 @@ import type { FieldKey, FieldValue, InvoiceDraft, SourceLine } from "../invoice/
 import { checkTotals, parseCents } from "../invoice/money";
 import { reconcileInvoice } from "../invoice/reconcile";
 import { recognizeInvoice } from "../invoice/recognize";
+import { extractCiiSourceFacts } from "./cii-evidence";
 
 /** A local, non-exporting gate for Issue #5. There is no PDF/XML writer here. */
 export type ExportBlockerCode =
@@ -163,18 +164,28 @@ export function assessExportPreflight(original: InvoiceDraft, reviewed: InvoiceD
   // The basis gate can now be satisfied by explicit PDF column evidence.
   add("semantics", "SOURCE_LINE_COVERAGE_UNVERIFIED", "items.coverage",
     "Die vollständige Erfassung aller sichtbaren Rechnungspositionen ist nicht nachgewiesen.");
-  add("semantics", "CURRENCY_UNVERIFIED", "currency",
-    "Der Rechnungswährungscode ist nicht unabhängig belegt (BT-5).");
-  add("semantics", "PARTY_ADDRESSES_UNVERIFIED", "parties",
-    "Vollständige Originalanschriften und Ländercodes von Aussteller und Empfänger fehlen.");
-  add("semantics", "INVOICE_TYPE_UNVERIFIED", "invoiceType",
-    "Der Rechnungstypcode ist nicht aus dem Original belegt (BT-3).");
+  const ciiFacts = extractCiiSourceFacts(original);
+  const lacking = new Set(ciiFacts.ok ? [] : ciiFacts.missing);
+  if (lacking.has("currency") || lacking.has("supportedCurrency")) {
+    add("semantics", "CURRENCY_UNVERIFIED", "currency",
+      "Der Rechnungswährungscode ist nicht unabhängig belegt (BT-5).");
+  }
+  if ([...lacking].some(key => key.startsWith("seller") || key.startsWith("buyer"))) {
+    add("semantics", "PARTY_ADDRESSES_UNVERIFIED", "parties",
+      "Vollständige Originalanschriften und Ländercodes von Aussteller und Empfänger fehlen.");
+  }
+  if (lacking.has("typeCode") || lacking.has("supportedType")) {
+    add("semantics", "INVOICE_TYPE_UNVERIFIED", "invoiceType",
+      "Der Rechnungstypcode ist nicht aus dem Original belegt (BT-3).");
+  }
   if (original.items.length === 0 || original.items.some(item => !isSourceBackedNet(item))) {
     add("semantics", "LINE_AMOUNT_BASIS_UNVERIFIED", "items.amountBasis",
       "Die Netto-/Brutto-Basis der einzelnen Positionen ist nicht belegt.");
   }
-  add("semantics", "LINE_VAT_CATEGORY_UNVERIFIED", "items.vatCategory",
-    "Steuersätze und Sonderbehandlungen sind noch keinen belegten EN-16931-Steuerkategorien zugeordnet.");
+  if ([...lacking].some(key => key.startsWith("items."))) {
+    add("semantics", "LINE_VAT_CATEGORY_UNVERIFIED", "items.vatCategory",
+      "Steuersätze und Sonderbehandlungen sind noch keinen belegten EN-16931-Steuerkategorien zugeordnet.");
+  }
 
   // A business-rule checker cannot be replaced by hand-written assertions.
   // No PDF may be downloaded until all independent gates pass in a later slice.
