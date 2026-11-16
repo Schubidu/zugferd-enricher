@@ -5,6 +5,7 @@ import type { InvoiceDraft, SourceLine } from "../invoice/model";
 import { buildCiiCandidate } from "./cii-candidate";
 import { extractCiiSourceFacts } from "./cii-evidence";
 import { assessExportPreflight } from "./preflight";
+import { compareCiiXmlToSource } from "./xml-source-match";
 
 function invoice(lines: string[]): InvoiceDraft {
   const source: SourceLine[] = lines.map((text, row) => ({
@@ -72,6 +73,9 @@ describe("EN16931 internal CII XML preparation (never a certified export)", () =
     expect(result.status).toBe("unvalidated");
     if (result.status !== "unvalidated") return;
     expect(result.profile).toBe("EN16931");
+    const sourceMatch = compareCiiXmlToSource(result.xml, original);
+    expect(sourceMatch.status).toBe("matched-subset");
+    if (sourceMatch.status === "matched-subset") expect(sourceMatch.checks).toBeGreaterThan(30);
     // Only the purpose-built synthetic invoice may leave Vitest for the CI
     // validator; no uploaded document or user's review is ever serialized.
     if (process.env.CII_VALIDATION_OUTPUT) {
@@ -225,4 +229,76 @@ describe("EN16931 internal CII XML preparation (never a certified export)", () =
     expect(malformed.status).toBe("blocked");
     if (malformed.status === "blocked") expect(malformed.reasons).toContain("EVIDENCE:deliveryDate");
   });
+
+  it("refuses schema-plausible but source-unfaithful values after XML serialization", () => {
+    const source = invoice(originalLines);
+    const candidateResult = buildCiiCandidate(source, structuredClone(source));
+    expect(candidateResult.status).toBe("unvalidated");
+    if (candidateResult.status !== "unvalidated") return;
+    const xml = candidateResult.xml;
+
+    const corruptions = [
+      [/<ram:Name>Haus &amp; Söhne GmbH<\/ram:Name>/,
+        "<ram:Name>Anderer Aussteller GmbH</ram:Name>", "Seller.name"],
+      [/<ram:Name>Kunde &lt;Partner&gt; UG<\/ram:Name>/,
+        "<ram:Name>Fremder Empfänger UG</ram:Name>", "Buyer.name"],
+      [/<ram:LineOne>Uferweg &amp; Ring 12<\/ram:LineOne>/,
+        "<ram:LineOne>Falsche Straße 5</ram:LineOne>", "Seller.street"],
+      [/<ram:GrandTotalAmount>190\.40<\/ram:GrandTotalAmount>/,
+        "<ram:GrandTotalAmount>190.41</ram:GrandTotalAmount>", "grossTotal"],
+      [/<ram:CategoryCode>S<\/ram:CategoryCode>/,
+        "<ram:CategoryCode>Z</ram:CategoryCode>", "lines.0.vatCategory"],
+      [/<ram:BilledQuantity unitCode="C62">2<\/ram:BilledQuantity>/,
+        '<ram:BilledQuantity unitCode="C62">3</ram:BilledQuantity>', "lines.0.quantity"],
+      [/<ram:LineTotalAmount>160\.00<\/ram:LineTotalAmount>/,
+        "<ram:LineTotalAmount>150.00</ram:LineTotalAmount>", "lines.0.amount"],
+      [/<ram:InvoiceCurrencyCode>EUR<\/ram:InvoiceCurrencyCode>/,
+        "<ram:InvoiceCurrencyCode>USD</ram:InvoiceCurrencyCode>", "currency"],
+    ] as const;
+
+    for (const [from,to,expected] of corruptions) {
+      expect(xml).toMatch(from);
+      const mismatch = compareCiiXmlToSource(xml.replace(from,to),source);
+      expect(mismatch.status).toBe("mismatch");
+      if (mismatch.status === "mismatch") {
+        expect(mismatch.reasons).toContain(expected);
+      }
+    }
+  });
+
+  it("rejects structural XML tampering, duplicate lines and unsafe declarations locally", () => {
+    const source = invoice(originalLines);
+    const result = buildCiiCandidate(source, structuredClone(source));
+    expect(result.status).toBe("unvalidated");
+    if (result.status !== "unvalidated") return;
+
+    const corruptedLine = result.xml.replace(
+      "</rsm:SupplyChainTradeTransaction>",
+      result.xml.match(/<ram:IncludedSupplyChainTradeLineItem>[\s\S]*?<\/ram:IncludedSupplyChainTradeLineItem>/)?.[0] +
+        "</rsm:SupplyChainTradeTransaction>",
+    );
+    const duplicate = compareCiiXmlToSource(corruptedLine,source);
+    expect(duplicate.status).toBe("mismatch");
+    if (duplicate.status === "mismatch") expect(duplicate.reasons).toContain("lines.count");
+
+    const invalid = compareCiiXmlToSource("<not-xml",source);
+    expect(invalid).toMatchObject({status:"mismatch",reasons:["INVALID_CII_XML"]});
+    const dtd = compareCiiXmlToSource(
+      '<!DOCTYPE invoice [<!ENTITY x "unsafe">]>' + result.xml,
+      source,
+    );
+    expect(dtd).toMatchObject({status:"mismatch",reasons:["UNSAFE_XML"]});
+  });
+
+  it("cannot compare XML to an incomplete or ambiguous source snapshot", () => {
+    const source = invoice(originalLines);
+    const result = buildCiiCandidate(source, structuredClone(source));
+    expect(result.status).toBe("unvalidated");
+    if (result.status !== "unvalidated") return;
+    const changed = invoice(originalLines.filter(line => !line.startsWith("Rechnungswährung:")));
+    expect(compareCiiXmlToSource(result.xml,changed)).toMatchObject({
+      status:"mismatch",reasons:["SOURCE_EVIDENCE_INCOMPLETE"],
+    });
+  });
+
 });
