@@ -118,7 +118,7 @@ const statement = new RegExp(
 );
 const authority = /\b(?:im\s+Namen|im\s+Auftrag)\s+(?:der|des)\s+(?:Gemeinde|Stadt|Kommune|Kurorts)\b/i;
 const noVat = /\b(?:ohne\s+(?:Umsatzsteuer|Mehrwertsteuer|USt|MwSt)|keine\s+(?:Umsatzsteuer|Mehrwertsteuer|USt|MwSt)|nicht\s+umsatzsteuerpflichtig)\b/i;
-const contradiction = /\b(?:nicht\s+ohne|(?:aber\s+)?nicht\s+im\s+(?:Namen|Auftrag)|aber\s+mit|doch\s+mit|inkl\.?\s+(?:Umsatzsteuer|MwSt|USt)|mit\s+\d{1,2}\s*%\s*(?:Umsatzsteuer|MwSt|USt))\b/i;
+const contradiction = /\b(?:nicht\s+ohne|(?:aber\s+)?nicht\s+im\s+(?:Namen|Auftrag)|aber\s+mit|doch\s+mit|(?:inkl\.?|inklusive|einschließlich)\s+(?:Umsatzsteuer|Mehrwertsteuer|MwSt|USt)|mit\s+\d{1,2}\s*%\s*(?:Umsatzsteuer|Mehrwertsteuer|MwSt|USt))\b/i;
 const anotherAmount = new RegExp(amount);
 
 export type SourceTaxEvidence = {
@@ -144,8 +144,30 @@ export function findSourceTaxEvidence(lines: readonly SourceLine[]): SourceTaxEv
     .filter((entry): entry is SourceTaxEvidence => entry !== null);
 }
 
-/** A tax explanation is not an additional line item, even if validation abstains. */
+/**
+ * Scan ALL source lines independently of ML scoring. A contradictory
+ * statement rejected by the candidate model must still veto tax treatment.
+ */
+export function findTaxStatementMentions(lines: readonly SourceLine[]): SourceTaxEvidence[] {
+  return lines.flatMap(line => {
+    const match = statement.exec(line.text);
+    if (!match?.groups) return [];
+    const {label, body, amount: printedAmount} = match.groups;
+    if (!label || !body || !printedAmount ||
+      !/\b(?:Umsatzsteuer|Mehrwertsteuer|USt|MwSt)\b/i.test(body) ||
+      /\b\d+(?:[.,]\d+)?\s*[x×]\s*[-+]?\d+[.,]\d{2}\b/i.test(body)) return [];
+    const amountCents = parseCents(printedAmount);
+    return amountCents === null ? [] : [{
+      label: label.toLocaleLowerCase("de-DE"), amountCents, evidenceId: line.id,
+    }];
+  });
+}
+
+/** Only a separate and uniquely matched explanation may be deduplicated. */
 export function isTaxExplanationLine(text: string): boolean {
-  return /^(?:Kurtaxe|Ortstaxe|Beherbergungssteuer|Tourismusabgabe)\b.*\b(?:Umsatzsteuer(?:pflichtig)?|Mehrwertsteuer|USt|MwSt)\b/i.test(text.trim()) &&
-    !/\b\d+(?:[.,]\d+)?\s*[x×]\s*[-+]?\d+[.,]\d{2}\b/.test(text);
+  const match = statement.exec(text.trim());
+  if (!match?.groups?.body) return false;
+  const body = match.groups.body;
+  return authority.test(body) && /\b(?:Umsatzsteuer|Mehrwertsteuer|USt|MwSt)\b/i.test(body) &&
+    !/\b\d+(?:[.,]\d+)?\s*[x×]\s*[-+]?\d+[.,]\d{2}\b/i.test(body);
 }
