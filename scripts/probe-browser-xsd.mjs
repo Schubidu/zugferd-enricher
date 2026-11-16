@@ -11,8 +11,11 @@
  * memory-only virtual IO provider: never a remote URL.
  */
 import assert from "node:assert/strict";
+import console from "node:console";
+import process from "node:process";
+import { TextDecoder, TextEncoder } from "node:util";
 import { readFileSync, readdirSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
   XmlDocument, XsdValidator, XmlBufferInputProvider, xmlRegisterInputProvider,
